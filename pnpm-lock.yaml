@@ -49,6 +49,9 @@ importers:
       '@types/three':
         specifier: ^0.179.0
         version: 0.179.0
+      chiptune3:
+        specifier: ^0.8.7
+        version: 0.8.7
 
 packages:
 
@@ -284,6 +287,9 @@ packages:
   check-error@2.1.3:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
     engines: {node: '>= 16'}
+
+  chiptune3@0.8.7:
+    resolution: {integrity: sha512-lFK7Lk146nijMkObg1FnWClvQLq5Ih/F+sV7bA1Cqx/9zmdTmCG8YLZIm51M/HRp4a6DfI79q1m2I1peGGjiig==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -771,6 +777,8 @@ snapshots:
       pathval: 2.0.1
 
   check-error@2.1.3: {}
+
+  chiptune3@0.8.7: {}
 
   debug@4.4.3:
     dependencies:
