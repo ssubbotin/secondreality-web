@@ -24,6 +24,22 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
 
+  apps/lab:
+    dependencies:
+      '@sr/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      three:
+        specifier: ^0.179.0
+        version: 0.179.1
+    devDependencies:
+      '@types/three':
+        specifier: ^0.179.0
+        version: 0.179.0
+      vite:
+        specifier: npm:rolldown-vite@^7.0.0
+        version: rolldown-vite@7.3.1(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.1)
+
   packages/engine:
     dependencies:
       three:

@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist", "noEmit": true },
+  "references": [{ "path": "../../packages/engine" }],
+  "include": ["src/**/*.ts", "vite.config.ts"]
+}
