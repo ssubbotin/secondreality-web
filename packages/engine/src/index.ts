@@ -1,3 +1,4 @@
+export * from './audio/audio-engine.js';
 export * from './audio/clock.js';
 export * from './loop.js';
 export * from './math/aspect.js';
