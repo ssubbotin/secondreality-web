@@ -7,8 +7,9 @@
     "node": ">=20.11"
   },
   "scripts": {
-    "dev": "pnpm --filter @sr/lab dev",
-    "build": "pnpm -r --filter './packages/*' build && pnpm --filter @sr/lab build",
+    "dev": "pnpm build:worklet && pnpm --filter @sr/lab dev",
+    "build": "pnpm build:worklet && pnpm -r --filter './packages/*' build && pnpm --filter @sr/lab build",
+    "build:worklet": "node scripts/build-worklet.mjs",
     "typecheck": "tsc -b --pretty",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

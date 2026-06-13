@@ -4,3 +4,4 @@ dist/
 .vite/
 coverage/
 .DS_Store
+apps/lab/public/worklets/player-worklet.js
