@@ -7,15 +7,16 @@ const REPORT_EVERY = 4; // post position ~every 4 quanta (~11.6ms @ 44.1k)
 class SRPlayer extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { wasmBinary, moduleData } = options.processorOptions;
+    const { moduleData } = options.processorOptions;
     this.ready = false;
     this.mod = 0;
     this.lib = null;
     this.bufPtr = 0;
     this.quantaSinceReport = 0;
 
+    // libopenmpt's wasm is embedded in the prepended glue — no wasmBinary needed.
     // eslint-disable-next-line no-undef
-    libopenmpt({ wasmBinary }).then((lib) => {
+    libopenmpt({}).then((lib) => {
       this.lib = lib;
       const bytes = new Uint8Array(moduleData);
       const dataPtr = lib._malloc(bytes.length);

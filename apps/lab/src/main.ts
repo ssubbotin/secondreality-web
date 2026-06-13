@@ -30,7 +30,6 @@ scene.add(cube);
 
 const audio = new AudioEngine({
   workletUrl: '/worklets/player-worklet.js',
-  wasmUrl: '/vendor/libopenmpt.wasm',
   moduleUrl: '/music/MUSIC0.S3M',
 });
 

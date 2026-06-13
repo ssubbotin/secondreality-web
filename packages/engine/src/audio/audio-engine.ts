@@ -2,7 +2,6 @@ import { AudioClock, type ClockSample, type PositionReport } from './clock.js';
 
 export interface AudioEngineOptions {
   workletUrl: string; // e.g. '/worklets/player-worklet.js'
-  wasmUrl: string; // e.g. '/vendor/libopenmpt.wasm'
   moduleUrl: string; // e.g. '/music/MUSIC0.S3M'
 }
 
@@ -25,16 +24,14 @@ export class AudioEngine {
     this.ctx = ctx;
     await ctx.audioWorklet.addModule(this.opts.workletUrl);
 
-    const [wasmBinary, moduleData] = await Promise.all([
-      fetch(this.opts.wasmUrl).then((r) => r.arrayBuffer()),
-      fetch(this.opts.moduleUrl).then((r) => r.arrayBuffer()),
-    ]);
+    // libopenmpt's wasm is embedded in the worklet bundle; we only fetch the module.
+    const moduleData = await fetch(this.opts.moduleUrl).then((r) => r.arrayBuffer());
 
     const node = new AudioWorkletNode(ctx, 'sr-player', {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { wasmBinary, moduleData },
+      processorOptions: { moduleData },
     });
 
     node.port.onmessage = (e: MessageEvent) => {

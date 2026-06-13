@@ -51,4 +51,5 @@ export interface LibOpenMPT {
   _openmpt_module_get_current_tempo2?(mod: number): number;
 }
 
-export type LibOpenMPTFactory = (opts: { wasmBinary: ArrayBuffer }) => Promise<LibOpenMPT>;
+// The vendored glue embeds its own wasm, so wasmBinary is optional (and currently unused).
+export type LibOpenMPTFactory = (opts?: { wasmBinary?: ArrayBuffer }) => Promise<LibOpenMPT>;
