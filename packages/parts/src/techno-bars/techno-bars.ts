@@ -69,9 +69,10 @@ export class TechnoBars implements Effect {
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
     if (!renderer) return;
-    // Additive white-on-black bars straight into the supplied target. The accum target + palette
-    // and feedback trail are layered on in later tasks.
-    this.bars?.render(renderer, target.gpu, 1);
+    // Additive bars straight into the supplied target. Each bar contributes a low intensity so a
+    // single bar reads as dim and overlaps brighten — that overlap density is what the palette LUT
+    // maps to a purple shade in the next task. (The accum target + trail are layered on later too.)
+    this.bars?.render(renderer, target.gpu, 0.2);
   }
 
   resize(width: number, height: number): void {

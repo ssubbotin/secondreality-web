@@ -1,6 +1,7 @@
 import {
   BufferGeometry,
   Color,
+  DoubleSide,
   Float32BufferAttribute,
   Mesh,
   OrthographicCamera,
@@ -29,14 +30,19 @@ const BLACK = new Color(0, 0, 0);
  * overlaps brighten — palette mapping and the feedback trail are layered on in later passes.
  */
 export class BarLayer {
-  private readonly positions = new Float32Array(VERTEX_COUNT * FLOATS_PER_VERTEX);
-  private readonly attribute = new Float32BufferAttribute(this.positions, FLOATS_PER_VERTEX);
+  // Float32BufferAttribute copies its input, so it owns the only buffer we write into (setQuads
+  // writes attribute.array directly — writing a separate array would never reach the GPU).
+  private readonly attribute = new Float32BufferAttribute(
+    new Float32Array(VERTEX_COUNT * FLOATS_PER_VERTEX),
+    FLOATS_PER_VERTEX,
+  );
   private readonly geometry = new BufferGeometry();
   private readonly intensityUniform = uniform(1);
   private readonly material = new MeshBasicNodeMaterial();
   private readonly scene = new Scene();
-  // left=0, right=320, top=0, bottom=200 → original coords map 1:1 with Y increasing downward.
-  private readonly camera = new OrthographicCamera(0, 320, 0, 200, -1, 1);
+  // Frame a region well larger than 320×200 and centred on (160,100): the bar formation reaches
+  // ~±300 px from centre, so a 1:1 frame would be entirely overfilled. Y increases downward.
+  private readonly camera = new OrthographicCamera(-340, 660, -212, 412, -1, 1);
 
   constructor() {
     this.geometry.setAttribute('position', this.attribute);
@@ -45,12 +51,17 @@ export class BarLayer {
     this.material.transparent = true;
     this.material.depthTest = false;
     this.material.depthWrite = false;
-    this.scene.add(new Mesh(this.geometry, this.material));
+    // The Y-inverted ortho (top=0, bottom=200) flips winding, so draw both sides; the bars also
+    // sweep well outside any once-computed bounding sphere, so skip frustum culling.
+    this.material.side = DoubleSide;
+    const mesh = new Mesh(this.geometry, this.material);
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
   }
 
   /** Overwrite the corner positions for all 11 quads (two triangles each). */
   setQuads(quads: Quad[]): void {
-    const p = this.positions;
+    const p = this.attribute.array as Float32Array;
     let o = 0;
     const write = (x: number, y: number): void => {
       p[o++] = x;
