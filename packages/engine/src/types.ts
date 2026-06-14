@@ -2,15 +2,15 @@ import type { WebGPURenderer } from 'three/webgpu';
 
 export type Backend = 'webgpu' | 'webgl2';
 
-/** The four-channel music clock reconstructed from STMIK Zxx markers (Plan 03 fills it in). */
+/** The four-channel music clock reconstructed from the live (order,row,tempo) of the playing module. */
 export interface MusicClock {
-  /** _np_zinfo — the awaited event code (parts do muscode(x)===x marker waits). */
+  /** _np_zinfo — set only by the ScreamTracker-3 Zxx command; the shipped FC modules carry none, so 0. */
   muscode: number;
-  /** _np_zplus — signed row-countdown clamped to [-32, +32]; the dominant primitive parts poll. */
+  /** dis_musplus() — DIS muscode_6's computed DX: a clamped signed countdown in [-32, +32] (the dominant primitive parts poll). */
   musplus: number;
   /** _np_row — current pattern row; also the `row` component of Cue.atOrderRow (order<<8|row). TECHNO uses musrow & 7 for the beat. */
   musrow: number;
-  /** _np_zframe — the separate music-frame channel (GLENZ/PLZPART gate on this). */
+  /** _np_zframe — the separate music-frame channel: a per-song-tick counter at BPM*2/5 Hz (GLENZ/PLZPART gate on this). */
   mframe: number;
   /** Continuous song position in seconds, interpolated from the audio sample counter. */
   songSeconds: number;

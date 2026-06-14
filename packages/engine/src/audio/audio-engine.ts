@@ -1,4 +1,5 @@
 import { AudioClock, type ClockSample, type PositionReport } from './clock.js';
+import { deobfuscateS3M } from './stmik-module.js';
 
 export interface AudioEngineOptions {
   workletUrl: string; // e.g. '/worklets/player-worklet.js'
@@ -25,7 +26,10 @@ export class AudioEngine {
     await ctx.audioWorklet.addModule(this.opts.workletUrl);
 
     // libopenmpt's wasm is embedded in the worklet bundle; we only fetch the module.
-    const moduleData = await fetch(this.opts.moduleUrl).then((r) => r.arrayBuffer());
+    // The shipped MUSIC*.S3M are Future Crew's original STMIK files, whose pattern bodies are
+    // obfuscated — de-obfuscate them into a standard S3M before libopenmpt parses (see stmik-module).
+    const raw = await fetch(this.opts.moduleUrl).then((r) => r.arrayBuffer());
+    const moduleData = deobfuscateS3M(raw).buffer;
 
     const node = new AudioWorkletNode(ctx, 'sr-player', {
       numberOfInputs: 0,

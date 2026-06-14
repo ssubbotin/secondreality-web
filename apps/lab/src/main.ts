@@ -1,4 +1,4 @@
-import { AudioEngine, type Backend, createRenderer, startLoop } from '@sr/engine';
+import { AudioEngine, type Backend, createRenderer, MusicSync, startLoop } from '@sr/engine';
 import { BoxGeometry, Mesh, PerspectiveCamera, Scene } from 'three';
 import { positionLocal, vec4 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
@@ -28,10 +28,17 @@ material.colorNode = vec4(positionLocal.add(0.5), 1.0);
 const cube = new Mesh(new BoxGeometry(1, 1, 1), material);
 scene.add(cube);
 
+// ?music=1 plays the techno module (MUSIC1: GLENZ/TECHNO/LENS/...); default is MUSIC0 (cinematic).
+const musicId = new URLSearchParams(location.search).get('music') === '1' ? '1' : '0';
+
 const audio = new AudioEngine({
   workletUrl: '/worklets/player-worklet.js',
-  moduleUrl: '/music/MUSIC0.S3M',
+  moduleUrl: `/music/MUSIC${musicId}.S3M`,
 });
+
+const music = new MusicSync();
+let lastRow = -1;
+let flash = 0;
 
 playBtn.addEventListener('click', async () => {
   await audio.start(); // inside the user gesture (autoplay policy)
@@ -52,7 +59,6 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-let fps = 0;
 let acc = 0;
 let count = 0;
 
@@ -65,20 +71,28 @@ try {
 resize();
 
 startLoop((dt) => {
-  const clk = audio.sample();
-  // Spin is a pure function of SONG TIME — it freezes if audio is paused/stalled.
+  const clk = music.resolve(audio.sample());
+
+  // Pulse the cube on each musical beat (every 8 rows of the 64-row bar); spin stays song-time driven.
+  if (clk.musrow !== lastRow) {
+    if (clk.musrow % 8 === 0) flash = 1;
+    lastRow = clk.musrow;
+  }
+  flash = Math.max(0, flash - dt * 4);
   cube.rotation.y = clk.songSeconds * 1.2;
   cube.rotation.x = clk.songSeconds * 0.7;
+  cube.scale.setScalar(1 + flash * 0.35);
+
   renderer.render(scene, camera);
 
   acc += dt;
   count++;
-  if (acc >= 0.5) {
-    fps = Math.round(count / acc);
+  if (acc >= 0.25) {
+    const fps = Math.round(count / acc);
     hud.textContent =
       `backend: ${backend}  fps: ${fps}\n` +
-      `song: ${clk.songSeconds.toFixed(2)}s  ord:${clk.order} row:${clk.row} pat:${clk.pattern}\n` +
-      `bpm: ${clk.bpm.toFixed(0)}`;
+      `song: ${clk.songSeconds.toFixed(2)}s  ord:${clk.order} row:${clk.musrow} pat:${clk.pattern} bpm:${clk.bpm.toFixed(0)}\n` +
+      `muscode: 0x${clk.muscode.toString(16)}  musplus: ${clk.musplus}  mframe: ${clk.mframe}`;
     acc = 0;
     count = 0;
   }
