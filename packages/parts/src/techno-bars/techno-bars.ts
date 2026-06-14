@@ -1,7 +1,7 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
 import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
 import { barQuads, type Quad } from './geometry.js';
-import { BarLayer } from './nodes.js';
+import { BarLayer, PaletteResolve } from './nodes.js';
 import {
   BEAT_FLASH_LEVEL,
   beatFlashDecay,
@@ -22,6 +22,7 @@ export class TechnoBars implements Effect {
   private ctx: DemoContext | null = null;
   private accum: GpuRenderTarget | null = null;
   private bars: BarLayer | null = null;
+  private palette: PaletteResolve | null = null;
   private simState: PhaseState = initPhaseA();
   private simClock = 0; // seconds fed to the fixed-step sim
   private acc = 0; // dt accumulator
@@ -37,6 +38,7 @@ export class TechnoBars implements Effect {
     this.ctx = ctx;
     this.accum = new GpuRenderTarget(ctx.viewport.width, ctx.viewport.height);
     this.bars = new BarLayer();
+    this.palette = new PaletteResolve(this.accum.texture);
     this.simState = initPhaseA();
     this.simClock = 0;
     this.acc = 0;
@@ -68,11 +70,11 @@ export class TechnoBars implements Effect {
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    if (!renderer) return;
-    // Additive bars straight into the supplied target. Each bar contributes a low intensity so a
-    // single bar reads as dim and overlaps brighten — that overlap density is what the palette LUT
-    // maps to a purple shade in the next task. (The accum target + trail are layered on later too.)
-    this.bars?.render(renderer, target.gpu, 0.2);
+    if (!renderer || !this.accum) return;
+    // Accumulate the bars (one additive unit each, so the red channel is the overlap count), then
+    // map that count through the purple palette into the supplied target; the beat flash brightens it.
+    this.bars?.render(renderer, this.accum, 1);
+    this.palette?.render(renderer, target.gpu, this.flash);
   }
 
   resize(width: number, height: number): void {
@@ -80,6 +82,8 @@ export class TechnoBars implements Effect {
   }
 
   dispose(): void {
+    this.palette?.dispose();
+    this.palette = null;
     this.bars?.dispose();
     this.bars = null;
     this.accum?.dispose();
