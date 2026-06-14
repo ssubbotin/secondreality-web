@@ -1,7 +1,8 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
+import { HalfFloatType } from 'three';
 import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
 import { barQuads, type Quad } from './geometry.js';
-import { BarLayer, PaletteResolve } from './nodes.js';
+import { BarLayer, PaletteResolve, Trail } from './nodes.js';
 import {
   BEAT_FLASH_LEVEL,
   beatFlashDecay,
@@ -22,6 +23,7 @@ export class TechnoBars implements Effect {
   private ctx: DemoContext | null = null;
   private accum: GpuRenderTarget | null = null;
   private bars: BarLayer | null = null;
+  private trail: Trail | null = null;
   private palette: PaletteResolve | null = null;
   private simState: PhaseState = initPhaseA();
   private simClock = 0; // seconds fed to the fixed-step sim
@@ -36,8 +38,10 @@ export class TechnoBars implements Effect {
 
   init(ctx: DemoContext): void {
     this.ctx = ctx;
-    this.accum = new GpuRenderTarget(ctx.viewport.width, ctx.viewport.height);
+    // Half-float so additive overlap counts and the feedback trail can exceed 1.0.
+    this.accum = new GpuRenderTarget(ctx.viewport.width, ctx.viewport.height, { type: HalfFloatType });
     this.bars = new BarLayer();
+    this.trail = new Trail(this.accum.texture, ctx.viewport.width, ctx.viewport.height);
     this.palette = new PaletteResolve(this.accum.texture);
     this.simState = initPhaseA();
     this.simClock = 0;
@@ -74,20 +78,24 @@ export class TechnoBars implements Effect {
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    if (!renderer || !this.accum) return;
-    // Accumulate the bars (one additive unit each, so the red channel is the overlap count), then
-    // map that count through the purple palette into the supplied target; the beat flash brightens it.
+    if (!renderer || !this.accum || !this.trail) return;
+    // Accumulate the bars (one additive unit each), feed that into the fading trail (the page-flip
+    // smear), then map the trail through the purple ramp into the target; the beat flash brightens it.
     this.bars?.render(renderer, this.accum, 1);
-    this.palette?.render(renderer, target.gpu, this.flash);
+    const trailTex = this.trail.render(renderer);
+    this.palette?.render(renderer, trailTex, target.gpu, this.flash);
   }
 
   resize(width: number, height: number): void {
     this.accum?.setSize(width, height);
+    this.trail?.setSize(width, height);
   }
 
   dispose(): void {
     this.palette?.dispose();
     this.palette = null;
+    this.trail?.dispose();
+    this.trail = null;
     this.bars?.dispose();
     this.bars = null;
     this.accum?.dispose();

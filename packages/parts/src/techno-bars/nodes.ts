@@ -4,6 +4,7 @@ import {
   DataTexture,
   DoubleSide,
   Float32BufferAttribute,
+  HalfFloatType,
   Mesh,
   NearestFilter,
   OrthographicCamera,
@@ -12,12 +13,12 @@ import {
   type Texture,
   UnsignedByteType,
 } from 'three';
-import { clamp, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { clamp, max, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
 import {
   AdditiveBlending,
-  type RenderTarget as GpuRenderTarget,
   MeshBasicNodeMaterial,
   QuadMesh,
+  RenderTarget as GpuRenderTarget,
   type WebGPURenderer,
 } from 'three/webgpu';
 import type { Quad } from './geometry.js';
@@ -111,40 +112,106 @@ export class BarLayer {
 }
 
 /**
- * Fullscreen pass: map the accumulation buffer's overlap count through the original 16×16 purple
- * palette. The accumulation stores one additive unit per covering bar, so its red channel is the
- * overlap count `a` (0..15); the beat flash supplies the brightness row `c` (0..15). NearestFilter
- * keeps the palette stepped (the authentic indexed look).
+ * Two-target ping-pong feedback: `out = current + fade·previous`, recreating the original's
+ * page-flip motion accumulation so the rotating bars leave fading trails. Targets are half-float so
+ * the accumulation can exceed 1.0. `render` returns the freshly written trail texture each frame.
+ */
+export class Trail {
+  private targetA: GpuRenderTarget;
+  private targetB: GpuRenderTarget;
+  private read: GpuRenderTarget;
+  private write: GpuRenderTarget;
+  private readonly fadeUniform = uniform(0.72);
+  private readonly currentNode: ReturnType<typeof textureNode>;
+  private readonly prevNode: ReturnType<typeof textureNode>;
+  private readonly material = new MeshBasicNodeMaterial();
+  private readonly quad: QuadMesh;
+
+  constructor(currentTexture: Texture, width: number, height: number) {
+    this.targetA = new GpuRenderTarget(width, height, { type: HalfFloatType });
+    this.targetB = new GpuRenderTarget(width, height, { type: HalfFloatType });
+    this.read = this.targetA;
+    this.write = this.targetB;
+    this.currentNode = textureNode(currentTexture, uv());
+    this.prevNode = textureNode(this.read.texture, uv());
+    // Bounded feedback: keep the brightest of "covered now" vs "the fading past", so the centre
+    // stays defined (no runaway accumulation to white) while the rotation history decays cleanly.
+    this.material.colorNode = max(this.currentNode, this.prevNode.mul(this.fadeUniform));
+    this.quad = new QuadMesh(this.material);
+  }
+
+  /** Advance the trail by one frame (reading the accumulation bound at construction). */
+  render(renderer: WebGPURenderer): Texture {
+    this.prevNode.value = this.read.texture;
+    renderer.setRenderTarget(this.write);
+    this.quad.render(renderer);
+    renderer.setRenderTarget(null);
+    const swap = this.read;
+    this.read = this.write;
+    this.write = swap;
+    return this.read.texture;
+  }
+
+  setSize(width: number, height: number): void {
+    this.targetA.setSize(width, height);
+    this.targetB.setSize(width, height);
+  }
+
+  dispose(): void {
+    this.targetA.dispose();
+    this.targetB.dispose();
+    this.material.dispose();
+  }
+}
+
+/**
+ * Fullscreen pass mapping a coverage/trail texture through a purple ramp. A continuous trail can't
+ * index the authentic plane-bitmask palette directly (that is the Approach-C path), so the palette's
+ * five base purples are interpolated into a smooth monotonic 16-step ramp: trail 0 → black, high →
+ * bright purple. The beat flash drives the brightness row `c`. NearestFilter keeps the steps crisp.
  */
 export class PaletteResolve {
   private readonly lut: DataTexture;
   private readonly flashUniform = uniform(0);
+  private readonly scaleUniform = uniform(5); // trail value → coverage step (0..15)
+  private readonly sourceNode: ReturnType<typeof textureNode>;
   private readonly material = new MeshBasicNodeMaterial();
   private readonly quad: QuadMesh;
 
-  constructor(accumTexture: Texture) {
-    const pal = buildTechnoPalette(); // 16×16×3, VGA 6-bit (0..63)
+  constructor(initialSource: Texture) {
+    const pal = buildTechnoPalette(); // [c*16+a]*3, VGA 6-bit
+    const tierA = [0, 1, 3, 7, 15]; // popcount 0..4 → the five base purples
     const data = new Uint8Array(16 * 16 * 4);
-    for (let i = 0; i < 16 * 16; i++) {
-      data[i * 4] = (pal[i * 3] ?? 0) * 4; // 6-bit -> 8-bit
-      data[i * 4 + 1] = (pal[i * 3 + 1] ?? 0) * 4;
-      data[i * 4 + 2] = (pal[i * 3 + 2] ?? 0) * 4;
-      data[i * 4 + 3] = 255;
+    for (let c = 0; c < 16; c++) {
+      for (let k = 0; k < 16; k++) {
+        const f = (k / 15) * 4;
+        const t0 = Math.floor(f);
+        const t1 = Math.min(4, t0 + 1);
+        const fr = f - t0;
+        for (let ch = 0; ch < 3; ch++) {
+          const v0 = pal[(c * 16 + (tierA[t0] ?? 0)) * 3 + ch] ?? 0;
+          const v1 = pal[(c * 16 + (tierA[t1] ?? 0)) * 3 + ch] ?? 0;
+          data[(c * 16 + k) * 4 + ch] = Math.round((v0 * (1 - fr) + v1 * fr) * 4); // 6-bit → 8-bit
+        }
+        data[(c * 16 + k) * 4 + 3] = 255;
+      }
     }
     this.lut = new DataTexture(data, 16, 16, RGBAFormat, UnsignedByteType);
     this.lut.minFilter = NearestFilter;
     this.lut.magFilter = NearestFilter;
     this.lut.needsUpdate = true;
 
-    const overlap = clamp(textureNode(accumTexture, uv()).r, 0, 15); // a
-    const flash = clamp(this.flashUniform, 0, 15); // c
-    const lutUv = vec2(overlap.add(0.5).div(16), flash.add(0.5).div(16));
+    this.sourceNode = textureNode(initialSource, uv());
+    const coverage = clamp(this.sourceNode.r.mul(this.scaleUniform), 0, 15);
+    const flash = clamp(this.flashUniform, 0, 15);
+    const lutUv = vec2(coverage.add(0.5).div(16), flash.add(0.5).div(16));
     this.material.colorNode = textureNode(this.lut, lutUv);
     this.quad = new QuadMesh(this.material);
   }
 
-  /** Resolve `accum` into `target`, with the current beat-flash level (0..15) brightening it. */
-  render(renderer: WebGPURenderer, target: GpuRenderTarget, flash: number): void {
+  /** Resolve `sourceTex` (the trail) into `target`, brightened by the beat-flash level (0..15). */
+  render(renderer: WebGPURenderer, sourceTex: Texture, target: GpuRenderTarget, flash: number): void {
+    this.sourceNode.value = sourceTex;
     this.flashUniform.value = flash;
     renderer.setRenderTarget(target);
     this.quad.render(renderer);
