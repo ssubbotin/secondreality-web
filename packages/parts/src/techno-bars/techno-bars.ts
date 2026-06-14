@@ -1,6 +1,6 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
-import { barQuads, type Quad } from './geometry.js';
+import { barQuads } from './geometry.js';
 import { BarLayer, PaletteResolve, PlaneStack } from './nodes.js';
 import {
   BEAT_FLASH_LEVEL,
@@ -39,7 +39,6 @@ export class TechnoBars implements Effect {
   private acc = 0; // dt accumulator
   private flash = 0;
   private lastRow = -1;
-  private quads: Quad[] = [];
 
   async load(_ctx: LoadContext): Promise<void> {
     // No external assets — tables are code (sin1024/palette).
@@ -106,8 +105,8 @@ export class TechnoBars implements Effect {
       this.simState = stepPhase(this.simState);
       this.flash = beatFlashDecay(this.flash);
     }
-    this.quads = barQuads(this.simState.rot, effectiveVm(this.simState));
-    this.bars?.setQuads(this.quads);
+    const quads = barQuads(this.simState.rot, effectiveVm(this.simState));
+    this.bars?.setQuads(quads);
   }
 
   render(_frame: FrameContext, target: RenderTarget): void {

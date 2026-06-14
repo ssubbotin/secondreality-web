@@ -17,8 +17,12 @@ export interface RunEffectDeps {
   music: MusicSync;
 }
 
-/** Mount a single Effect, drive its lifecycle, and blit its target to the canvas. */
-export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<void> {
+/**
+ * Mount a single Effect, drive its lifecycle, and blit its target to the canvas. Returns a teardown
+ * closure that stops the loop and releases GPU resources — call it on HMR / unmount so reloads don't
+ * accumulate orphaned RAF loops and render targets.
+ */
+export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<() => void> {
   const { handle, canvas, audio, music } = deps;
   const { renderer, backend } = handle;
 
@@ -48,8 +52,12 @@ export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<vo
   window.addEventListener('resize', onResize);
   onResize();
 
+  // The blit source is the effect's render target. three reuses the same Texture object across
+  // RenderTarget.setSize, so bind it once here rather than rebuilding the TSL node every frame.
+  blit.setSource(gpu.texture);
+
   let frameNumber = 0;
-  startLoop((dt) => {
+  const loop = startLoop((dt) => {
     const frame: FrameContext = {
       clock: music.resolve(audio.sample()),
       dt,
@@ -60,8 +68,15 @@ export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<vo
     effect.update(frame);
     effect.render(frame, { width: gpu.width, height: gpu.height, gpu });
 
-    blit.setSource(gpu.texture);
     renderer.setRenderTarget(null);
     blit.render(renderer);
   });
+
+  return () => {
+    loop.stop();
+    window.removeEventListener('resize', onResize);
+    effect.dispose();
+    blit.dispose();
+    gpu.dispose();
+  };
 }

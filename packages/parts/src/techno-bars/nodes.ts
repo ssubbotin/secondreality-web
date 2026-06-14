@@ -145,10 +145,6 @@ export class PlaneStack {
     ];
   }
 
-  setSize(width: number, height: number): void {
-    for (const p of this.planes) p.setSize(width, height);
-  }
-
   /** Crisp (NearestFilter) vs smooth (LinearFilter) upscaling of the planes to the output. */
   setFilter(filter: MagnificationTextureFilter): void {
     for (const p of this.planes) {

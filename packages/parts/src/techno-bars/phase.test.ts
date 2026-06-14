@@ -30,6 +30,37 @@ describe('phase — KOE.C doit1/doit2 steppers', () => {
     expect(beatFlashDecay(1)).toBe(0);
     expect(beatFlashDecay(0)).toBe(0);
   });
+
+  it('phase A: velocity reflects (bounces) when vm would dip below 25', () => {
+    let s = initPhaseA();
+    let reflected = false;
+    for (let i = 0; i < 12; i++) {
+      const prev = s;
+      s = stepPhase(s);
+      // Reflection: the accelerating descent (vma < 0) flips to a climb and vm is held at/above 25.
+      if (prev.vma < 0 && s.vma >= 0) {
+        reflected = true;
+        expect(s.vm).toBeGreaterThanOrEqual(25);
+        break;
+      }
+    }
+    expect(reflected).toBe(true);
+  });
+
+  it('phase B: velocity reflects when vm would go below 0', () => {
+    let s = initPhaseB();
+    let reflected = false;
+    for (let i = 0; i < 200; i++) {
+      const prev = s;
+      s = stepPhase(s);
+      if (prev.vma < 0 && s.vma >= 0) {
+        reflected = true;
+        expect(s.vm).toBeGreaterThanOrEqual(0);
+        break;
+      }
+    }
+    expect(reflected).toBe(true);
+  });
 });
 
 describe('effectiveVm — phase-B vm is divided back by 64 (doit2)', () => {

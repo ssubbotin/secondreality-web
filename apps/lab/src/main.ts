@@ -23,10 +23,18 @@ const audio = new AudioEngine({
 });
 const music = new MusicSync();
 
-playBtn.addEventListener('click', async () => {
-  await audio.start();
-  playBtn.textContent = '⏸ playing';
-});
+// Scope the UI listeners to an AbortController so HMR can remove them in one shot — otherwise each
+// reload stacks another listener on the persistent #play / #authentic elements.
+const ui = new AbortController();
+
+playBtn.addEventListener(
+  'click',
+  async () => {
+    await audio.start();
+    playBtn.textContent = '⏸ playing';
+  },
+  { signal: ui.signal },
+);
 
 try {
   await handle.ready;
@@ -36,8 +44,19 @@ try {
 }
 
 const effect = new TechnoBars();
-authBox.addEventListener('change', () => {
-  effect.setMode(authBox.checked ? 'authentic' : 'modern');
-});
+authBox.addEventListener(
+  'change',
+  () => {
+    effect.setMode(authBox.checked ? 'authentic' : 'modern');
+  },
+  { signal: ui.signal },
+);
 
-await runEffect(effect, { handle, canvas, audio, music });
+const teardown = await runEffect(effect, { handle, canvas, audio, music });
+
+// Tear down the previous instance before Vite swaps the module, so reloads don't accumulate
+// orphaned RAF loops, render targets, or duplicate listeners.
+import.meta.hot?.dispose(() => {
+  ui.abort();
+  teardown();
+});
