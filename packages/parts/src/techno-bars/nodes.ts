@@ -14,7 +14,7 @@ import {
   type Texture,
   UnsignedByteType,
 } from 'three';
-import { clamp, max, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { attribute, clamp, max, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
 import {
   AdditiveBlending,
   RenderTarget as GpuRenderTarget,
@@ -25,26 +25,31 @@ import {
 import type { Quad } from './geometry.js';
 import { buildTechnoPalette } from './palette.js';
 
-const QUAD_COUNT = 11;
-const VERTS_PER_QUAD = 6; // two triangles
-const VERTEX_COUNT = QUAD_COUNT * VERTS_PER_QUAD; // 66
-const FLOATS_PER_VERTEX = 3; // x, y, z
+const BAR_COUNT = 11;
+const VERTS_PER_BAR = 12; // each bar = 2 half-quads (split on the centre line) × 2 triangles × 3
+const VERTEX_COUNT = BAR_COUNT * VERTS_PER_BAR; // 132
+
+// Per-vertex lightsourcing (KOE.C power0/power1): bright along the bar's centre line, dark at its
+// long edges. Additively the brighter core accumulates higher, so the palette maps it toward
+// white while the edges stay purple — the original's white-core / pink-edge ribbons.
+const CORE = 1.0;
+const EDGE = 0.18;
+// Intensity per vertex, matching the vertex order written in setQuads (c1,e1,e2 / c1,e2,c4 / e1,c2,c3 / e1,c3,e2).
+const VERTEX_INTENSITY = [EDGE, CORE, CORE, EDGE, CORE, EDGE, CORE, EDGE, EDGE, CORE, EDGE, CORE];
 
 const BLACK = new Color(0, 0, 0);
 
 /**
  * Additive accumulation pass for the 11 techno bars. The quad corners come from `barQuads` in the
- * original 320×200 screen space (centre 160,100, Y down). An orthographic camera maps that space
- * directly onto the target, so corners are uploaded verbatim. Bars draw as additive grey/white so
- * overlaps brighten — palette mapping and the feedback trail are layered on in later passes.
+ * original 320×200 screen space (centre 160,100, Y down); an orthographic camera maps that space
+ * directly onto the target. Each bar is split on its centre line and lightsourced (bright core,
+ * dark edges) so overlaps and the palette produce the original's white-cored pink ribbons.
  */
 export class BarLayer {
   // Float32BufferAttribute copies its input, so it owns the only buffer we write into (setQuads
-  // writes attribute.array directly — writing a separate array would never reach the GPU).
-  private readonly attribute = new Float32BufferAttribute(
-    new Float32Array(VERTEX_COUNT * FLOATS_PER_VERTEX),
-    FLOATS_PER_VERTEX,
-  );
+  // writes the attribute array directly — writing a separate array would never reach the GPU).
+  private readonly posAttr = new Float32BufferAttribute(new Float32Array(VERTEX_COUNT * 3), 3);
+  private readonly intAttr = new Float32BufferAttribute(new Float32Array(VERTEX_COUNT), 1);
   private readonly geometry = new BufferGeometry();
   private readonly intensityUniform = uniform(1);
   private readonly material = new MeshBasicNodeMaterial();
@@ -54,8 +59,16 @@ export class BarLayer {
   private readonly camera = new OrthographicCamera(0, 320, 0, 200, -1, 1);
 
   constructor() {
-    this.geometry.setAttribute('position', this.attribute);
-    this.material.colorNode = vec3(this.intensityUniform);
+    this.geometry.setAttribute('position', this.posAttr);
+    this.geometry.setAttribute('intensity', this.intAttr);
+    // The per-vertex intensity pattern is static (same core/edge layout every frame); fill once.
+    const ia = this.intAttr.array as Float32Array;
+    for (let i = 0; i < BAR_COUNT; i++) {
+      for (let v = 0; v < VERTS_PER_BAR; v++) ia[i * VERTS_PER_BAR + v] = VERTEX_INTENSITY[v] ?? 0;
+    }
+    this.intAttr.needsUpdate = true;
+
+    this.material.colorNode = vec3(attribute('intensity', 'float').mul(this.intensityUniform));
     this.material.blending = AdditiveBlending;
     this.material.transparent = true;
     this.material.depthTest = false;
@@ -68,32 +81,42 @@ export class BarLayer {
     this.scene.add(mesh);
   }
 
-  /** Overwrite the corner positions for all 11 quads (two triangles each). */
+  /** Overwrite the vertex positions for all 11 bars (each split on its centre line e1–e2). */
   setQuads(quads: Quad[]): void {
-    const p = this.attribute.array as Float32Array;
+    const p = this.posAttr.array as Float32Array;
     let o = 0;
     const write = (x: number, y: number): void => {
       p[o++] = x;
       p[o++] = y;
       p[o++] = 0;
     };
-    for (let i = 0; i < QUAD_COUNT; i++) {
+    for (let i = 0; i < BAR_COUNT; i++) {
       const q = quads[i];
       if (!q) {
-        // Degenerate (collapse to origin) if fewer than 11 quads are supplied.
-        for (let v = 0; v < VERTS_PER_QUAD; v++) write(0, 0);
+        for (let v = 0; v < VERTS_PER_BAR; v++) write(0, 0); // degenerate if under-supplied
         continue;
       }
-      // Triangle (c1, c2, c3)
+      // Centre-line endpoints: midpoint of the two corners at each end.
+      const e1x = (q.x1 + q.x2) / 2;
+      const e1y = (q.y1 + q.y2) / 2;
+      const e2x = (q.x3 + q.x4) / 2;
+      const e2y = (q.y3 + q.y4) / 2;
+      // Half 1 (-v edge → centre): (c1,e1,e2) + (c1,e2,c4)
       write(q.x1, q.y1);
+      write(e1x, e1y);
+      write(e2x, e2y);
+      write(q.x1, q.y1);
+      write(e2x, e2y);
+      write(q.x4, q.y4);
+      // Half 2 (centre → +v edge): (e1,c2,c3) + (e1,c3,e2)
+      write(e1x, e1y);
       write(q.x2, q.y2);
       write(q.x3, q.y3);
-      // Triangle (c1, c3, c4)
-      write(q.x1, q.y1);
+      write(e1x, e1y);
       write(q.x3, q.y3);
-      write(q.x4, q.y4);
+      write(e2x, e2y);
     }
-    this.attribute.needsUpdate = true;
+    this.posAttr.needsUpdate = true;
   }
 
   /** Additively draw the bars into `target`, scaled by `intensity` (clears target to black first). */
@@ -184,7 +207,7 @@ export class Trail {
 export class PaletteResolve {
   private readonly lut: DataTexture;
   private readonly flashUniform = uniform(0);
-  private readonly scaleUniform = uniform(5); // trail value → coverage step (0..15)
+  private readonly scaleUniform = uniform(8); // trail value → coverage step (0..15)
   private readonly sourceNode: ReturnType<typeof textureNode>;
   private readonly material = new MeshBasicNodeMaterial();
   private readonly quad: QuadMesh;
