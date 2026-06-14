@@ -5,4 +5,5 @@ export * from './math/aspect.js';
 export * from './render/renderer.js';
 export * from './render/select-backend.js';
 export * from './sync/marker-table.js';
+export * from './sync/reconstruct.js';
 export * from './types.js';
