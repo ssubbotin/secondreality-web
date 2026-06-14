@@ -1,8 +1,7 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
-import { HalfFloatType, LinearFilter, NearestFilter } from 'three';
-import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
+import { LinearFilter, NearestFilter } from 'three';
 import { barQuads, type Quad } from './geometry.js';
-import { BarLayer, PaletteResolve, Trail } from './nodes.js';
+import { BarLayer, PaletteResolve, PlaneStack } from './nodes.js';
 import {
   BEAT_FLASH_LEVEL,
   beatFlashDecay,
@@ -31,12 +30,12 @@ export class TechnoBars implements Effect {
   private mode: LookMode = 'modern';
   private vpW = 1;
   private vpH = 1;
-  private accum: GpuRenderTarget | null = null;
   private bars: BarLayer | null = null;
-  private trail: Trail | null = null;
+  private planes: PlaneStack | null = null;
   private palette: PaletteResolve | null = null;
   private simState: PhaseState = initPhaseA();
   private simClock = 0; // seconds fed to the fixed-step sim
+  private simStep = 0; // monotonic sim-step counter, drives the plane cycling
   private acc = 0; // dt accumulator
   private flash = 0;
   private lastRow = -1;
@@ -51,10 +50,11 @@ export class TechnoBars implements Effect {
     this.vpW = ctx.viewport.width;
     this.vpH = ctx.viewport.height;
     this.bars = new BarLayer();
-    this.rebuildTargets(); // sized for the current mode (creates accum + trail)
-    this.palette = new PaletteResolve((this.accum as GpuRenderTarget).texture);
+    this.rebuildTargets(); // sized for the current mode (creates the plane stack)
+    this.palette = new PaletteResolve((this.planes as PlaneStack).textures());
     this.simState = initPhaseA();
     this.simClock = 0;
+    this.simStep = 0;
     this.acc = 0;
   }
 
@@ -62,25 +62,23 @@ export class TechnoBars implements Effect {
   setMode(mode: LookMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
-    if (this.ctx) this.rebuildTargets(); // re-size the internal targets to the new mode
+    // re-size the planes; the palette rebinds to the new plane textures each frame in render().
+    if (this.ctx) this.rebuildTargets();
   }
 
-  /** Internal accumulation/trail resolution: full viewport (modern) or chunky mode-X (authentic). */
+  /** Internal plane resolution: full viewport (modern) or chunky mode-X (authentic). */
   private internalSize(): { width: number; height: number } {
     if (this.mode === 'modern') return { width: this.vpW, height: this.vpH };
     const height = AUTHENTIC_HEIGHT;
     return { width: Math.max(1, Math.round((height * this.vpW) / this.vpH)), height };
   }
 
-  /** (Re)create the half-float accumulation + trail at the mode's resolution and filtering. */
+  /** (Re)create the 4-plane coverage stack at the mode's resolution and filtering. */
   private rebuildTargets(): void {
     const { width, height } = this.internalSize();
-    this.trail?.dispose();
-    this.accum?.dispose();
-    // Half-float so additive overlap counts and the feedback trail can exceed 1.0.
-    this.accum = new GpuRenderTarget(width, height, { type: HalfFloatType });
-    this.trail = new Trail(this.accum.texture, width, height);
-    this.trail.setFilter(this.mode === 'authentic' ? NearestFilter : LinearFilter);
+    this.planes?.dispose();
+    this.planes = new PlaneStack(width, height);
+    this.planes.setFilter(this.mode === 'authentic' ? NearestFilter : LinearFilter);
   }
 
   update(frame: FrameContext): void {
@@ -96,6 +94,7 @@ export class TechnoBars implements Effect {
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       this.simClock += SIM_DT;
+      this.simStep++;
       // Phase A → B → A, self-advancing (the sequencer will gate entry via musplus/mframe later).
       if (this.simState.kind === 'A' && this.simClock >= PHASE_A_SECONDS) {
         this.simState = initPhaseB();
@@ -113,12 +112,12 @@ export class TechnoBars implements Effect {
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    if (!renderer || !this.accum || !this.trail) return;
-    // Accumulate the bars (one additive unit each), feed that into the fading trail (the page-flip
-    // smear), then map the trail through the purple ramp into the target; the beat flash brightens it.
-    this.bars?.render(renderer, this.accum, 1);
-    const trailTex = this.trail.render(renderer);
-    this.palette?.render(renderer, trailTex, target.gpu, this.flash);
+    if (!renderer || !this.planes || !this.bars || !this.palette) return;
+    // Render the current solid bars into the live plane (cycles every PLANE_PERIOD sim-frames);
+    // the other 3 planes hold older snapshots. The palette then maps each pixel's 4-bit plane
+    // combination through the authentic purple palette; the beat flash brightens it.
+    this.bars.render(renderer, this.planes.live(this.simStep), 1);
+    this.palette.render(renderer, this.planes.textures(), target.gpu, this.flash);
   }
 
   resize(width: number, height: number): void {
@@ -130,12 +129,10 @@ export class TechnoBars implements Effect {
   dispose(): void {
     this.palette?.dispose();
     this.palette = null;
-    this.trail?.dispose();
-    this.trail = null;
+    this.planes?.dispose();
+    this.planes = null;
     this.bars?.dispose();
     this.bars = null;
-    this.accum?.dispose();
-    this.accum = null;
     this.ctx = null;
   }
 }

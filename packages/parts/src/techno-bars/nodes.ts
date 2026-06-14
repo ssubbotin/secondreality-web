@@ -4,7 +4,6 @@ import {
   DataTexture,
   DoubleSide,
   Float32BufferAttribute,
-  HalfFloatType,
   type MagnificationTextureFilter,
   Mesh,
   NearestFilter,
@@ -14,7 +13,7 @@ import {
   type Texture,
   UnsignedByteType,
 } from 'three';
-import { clamp, max, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
+import { clamp, step, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
 import {
   AdditiveBlending,
   RenderTarget as GpuRenderTarget,
@@ -112,122 +111,114 @@ export class BarLayer {
   }
 }
 
-/**
- * Two-target ping-pong feedback: `out = max(current, fade·previous)`, recreating the original's
- * page-flip motion accumulation so the rotating bars leave fading trails (bounded, so the centre
- * stays defined). Targets are half-float so values can exceed 1.0. `render` returns the freshly
- * written trail texture each frame.
- */
-export class Trail {
-  private targetA: GpuRenderTarget;
-  private targetB: GpuRenderTarget;
-  private read: GpuRenderTarget;
-  private write: GpuRenderTarget;
-  private readonly fadeUniform = uniform(0.72);
-  private readonly currentNode: ReturnType<typeof textureNode>;
-  private readonly prevNode: ReturnType<typeof textureNode>;
-  private readonly material = new MeshBasicNodeMaterial();
-  private readonly quad: QuadMesh;
+/** Sim-frames between plane snapshots — the original's page-flip period (`pl` cycles 1,2,4,8). */
+export const PLANE_PERIOD = 8;
 
-  constructor(currentTexture: Texture, width: number, height: number) {
-    this.targetA = new GpuRenderTarget(width, height, { type: HalfFloatType });
-    this.targetB = new GpuRenderTarget(width, height, { type: HalfFloatType });
-    this.read = this.targetA;
-    this.write = this.targetB;
-    this.currentNode = textureNode(currentTexture, uv());
-    this.prevNode = textureNode(this.read.texture, uv());
-    // Bounded feedback: keep the brightest of "covered now" vs "the fading past", so the centre
-    // stays defined (no runaway accumulation to white) while the rotation history decays cleanly.
-    this.material.colorNode = max(this.currentNode, this.prevNode.mul(this.fadeUniform));
-    this.quad = new QuadMesh(this.material);
+/**
+ * The original composites the solid bars into one of 4 VGA bit-planes, cycling the plane every
+ * page-flip period (~8 frames). A pixel's colour then comes from its 4-bit plane combination —
+ * which of the last 4 snapshots covered it. We reproduce that with 4 coverage targets: the "live"
+ * one is re-rendered every frame (smooth current motion); the other 3 hold frozen snapshots ~8/16/24
+ * sim-frames old, supplying the temporal depth that makes the look cycle pink-ribbon ↔ grey-lattice.
+ */
+export class PlaneStack {
+  private readonly planes: GpuRenderTarget[];
+
+  constructor(width: number, height: number) {
+    this.planes = [0, 1, 2, 3].map(() => new GpuRenderTarget(width, height));
   }
 
-  /** Advance the trail by one frame (reading the accumulation bound at construction). */
-  render(renderer: WebGPURenderer): Texture {
-    this.prevNode.value = this.read.texture;
-    renderer.setRenderTarget(this.write);
-    this.quad.render(renderer);
-    renderer.setRenderTarget(null);
-    const swap = this.read;
-    this.read = this.write;
-    this.write = swap;
-    return this.read.texture;
+  /** The target to render the current coverage into; cycles every PLANE_PERIOD sim-frames. */
+  live(simStep: number): GpuRenderTarget {
+    return this.planes[Math.floor(simStep / PLANE_PERIOD) % 4] as GpuRenderTarget;
+  }
+
+  /** The four plane coverage textures (LUT assembly is order-independent). */
+  textures(): [Texture, Texture, Texture, Texture] {
+    const p = this.planes;
+    return [
+      (p[0] as GpuRenderTarget).texture,
+      (p[1] as GpuRenderTarget).texture,
+      (p[2] as GpuRenderTarget).texture,
+      (p[3] as GpuRenderTarget).texture,
+    ];
   }
 
   setSize(width: number, height: number): void {
-    this.targetA.setSize(width, height);
-    this.targetB.setSize(width, height);
+    for (const p of this.planes) p.setSize(width, height);
   }
 
-  /** Crisp (NearestFilter) vs smooth (LinearFilter) upscaling of the trail to the output. */
+  /** Crisp (NearestFilter) vs smooth (LinearFilter) upscaling of the planes to the output. */
   setFilter(filter: MagnificationTextureFilter): void {
-    for (const t of [this.targetA, this.targetB]) {
-      t.texture.minFilter = filter;
-      t.texture.magFilter = filter;
-      t.texture.needsUpdate = true;
+    for (const p of this.planes) {
+      p.texture.minFilter = filter;
+      p.texture.magFilter = filter;
+      p.texture.needsUpdate = true;
     }
   }
 
   dispose(): void {
-    this.targetA.dispose();
-    this.targetB.dispose();
-    this.material.dispose();
+    for (const p of this.planes) p.dispose();
   }
 }
 
 /**
- * Fullscreen pass mapping a coverage/trail texture through a purple ramp. A continuous trail can't
- * index the authentic plane-bitmask palette directly (that is the Approach-C path), so the palette's
- * five base purples are interpolated into a smooth monotonic 16-step ramp: trail 0 → black, high →
- * bright purple. The beat flash drives the brightness row `c`. NearestFilter keeps the steps crisp.
+ * Fullscreen pass mapping the 4 plane coverages through the authentic 16×16 palette. Each plane
+ * contributes one bit of the 4-bit index `a` (covered → 1); `buildTechnoPalette` resolves `a` by
+ * popcount → base purple (more planes set → brighter), exactly as the original VGA palette did. The
+ * beat flash drives the brightness row `c`. NearestFilter keeps the indexed steps crisp.
  */
 export class PaletteResolve {
   private readonly lut: DataTexture;
   private readonly flashUniform = uniform(0);
-  private readonly scaleUniform = uniform(5); // trail value → coverage step (0..15)
-  private readonly sourceNode: ReturnType<typeof textureNode>;
+  private readonly p0: ReturnType<typeof textureNode>;
+  private readonly p1: ReturnType<typeof textureNode>;
+  private readonly p2: ReturnType<typeof textureNode>;
+  private readonly p3: ReturnType<typeof textureNode>;
   private readonly material = new MeshBasicNodeMaterial();
   private readonly quad: QuadMesh;
 
-  constructor(initialSource: Texture) {
-    const pal = buildTechnoPalette(); // [c*16+a]*3, VGA 6-bit
-    const tierA = [0, 1, 3, 7, 15]; // popcount 0..4 → the five base purples
+  constructor(planes: [Texture, Texture, Texture, Texture]) {
+    // Authentic palette: 16 brightness rows (c) × 16 plane-combination columns (a), VGA 6-bit → 8-bit.
+    const pal = buildTechnoPalette();
     const data = new Uint8Array(16 * 16 * 4);
-    for (let c = 0; c < 16; c++) {
-      for (let k = 0; k < 16; k++) {
-        const f = (k / 15) * 4;
-        const t0 = Math.floor(f);
-        const t1 = Math.min(4, t0 + 1);
-        const fr = f - t0;
-        for (let ch = 0; ch < 3; ch++) {
-          const v0 = pal[(c * 16 + (tierA[t0] ?? 0)) * 3 + ch] ?? 0;
-          const v1 = pal[(c * 16 + (tierA[t1] ?? 0)) * 3 + ch] ?? 0;
-          data[(c * 16 + k) * 4 + ch] = Math.round((v0 * (1 - fr) + v1 * fr) * 4); // 6-bit → 8-bit
-        }
-        data[(c * 16 + k) * 4 + 3] = 255;
-      }
+    for (let i = 0; i < 16 * 16; i++) {
+      data[i * 4] = (pal[i * 3] ?? 0) * 4;
+      data[i * 4 + 1] = (pal[i * 3 + 1] ?? 0) * 4;
+      data[i * 4 + 2] = (pal[i * 3 + 2] ?? 0) * 4;
+      data[i * 4 + 3] = 255;
     }
     this.lut = new DataTexture(data, 16, 16, RGBAFormat, UnsignedByteType);
     this.lut.minFilter = NearestFilter;
     this.lut.magFilter = NearestFilter;
     this.lut.needsUpdate = true;
 
-    this.sourceNode = textureNode(initialSource, uv());
-    const coverage = clamp(this.sourceNode.r.mul(this.scaleUniform), 0, 15);
-    const flash = clamp(this.flashUniform, 0, 15);
-    const lutUv = vec2(coverage.add(0.5).div(16), flash.add(0.5).div(16));
+    this.p0 = textureNode(planes[0], uv());
+    this.p1 = textureNode(planes[1], uv());
+    this.p2 = textureNode(planes[2], uv());
+    this.p3 = textureNode(planes[3], uv());
+    // a = b0 + 2·b1 + 4·b2 + 8·b3, each bit = "this plane covered" (coverage ≥ 0.5).
+    const a = step(0.5, this.p0.r)
+      .add(step(0.5, this.p1.r).mul(2))
+      .add(step(0.5, this.p2.r).mul(4))
+      .add(step(0.5, this.p3.r).mul(8));
+    const c = clamp(this.flashUniform, 0, 15);
+    const lutUv = vec2(a.add(0.5).div(16), c.add(0.5).div(16));
     this.material.colorNode = textureNode(this.lut, lutUv);
     this.quad = new QuadMesh(this.material);
   }
 
-  /** Resolve `sourceTex` (the trail) into `target`, brightened by the beat-flash level (0..15). */
+  /** Resolve the 4 plane coverages into `target`, brightened by the beat-flash level (0..15). */
   render(
     renderer: WebGPURenderer,
-    sourceTex: Texture,
+    planes: [Texture, Texture, Texture, Texture],
     target: GpuRenderTarget,
     flash: number,
   ): void {
-    this.sourceNode.value = sourceTex;
+    this.p0.value = planes[0];
+    this.p1.value = planes[1];
+    this.p2.value = planes[2];
+    this.p3.value = planes[3];
     this.flashUniform.value = flash;
     renderer.setRenderTarget(target);
     this.quad.render(renderer);
