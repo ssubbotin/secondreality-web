@@ -6,6 +6,7 @@ import { BarLayer, PaletteResolve, Trail } from './nodes.js';
 import {
   BEAT_FLASH_LEVEL,
   beatFlashDecay,
+  effectiveVm,
   initPhaseA,
   initPhaseB,
   type PhaseState,
@@ -106,7 +107,7 @@ export class TechnoBars implements Effect {
       this.simState = stepPhase(this.simState);
       this.flash = beatFlashDecay(this.flash);
     }
-    this.quads = barQuads(this.simState.rot, this.simState.vm);
+    this.quads = barQuads(this.simState.rot, effectiveVm(this.simState));
     this.bars?.setQuads(this.quads);
   }
 

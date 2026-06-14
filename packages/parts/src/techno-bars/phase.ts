@@ -42,6 +42,15 @@ export function stepPhase(s: PhaseState): PhaseState {
   return n;
 }
 
+/**
+ * The `vm` value to feed barQuads. doit2 (phase B) scales velocity by `vm/64` (KOE.C:419-420) with
+ * `vm` initialised to 100*64, whereas doit1 (phase A) uses `vm` directly (KOE.C:360). Normalising
+ * here keeps barQuads a single `vx*vm/100` formula; without it phase B's bars are 64× oversized.
+ */
+export function effectiveVm(s: PhaseState): number {
+  return s.kind === 'B' ? trunc(s.vm / 64) : s.vm;
+}
+
 /** curpal-style beat flash: decays one level per step toward 0. */
 export function beatFlashDecay(level: number): number {
   return level > 0 ? level - 1 : 0;
