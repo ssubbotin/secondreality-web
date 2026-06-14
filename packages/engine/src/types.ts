@@ -6,7 +6,7 @@ export type Backend = 'webgpu' | 'webgl2';
 export interface MusicClock {
   /** _np_zinfo — the awaited event code (parts do muscode(x)===x marker waits). */
   muscode: number;
-  /** _np_zplus — signed row-countdown clamped to [-32, +32]; the dominant primitive parts poll. */
+  /** _np_zplus — signed distance to the nearest bar boundary, range [-32, +31] (the dominant primitive parts poll). */
   musplus: number;
   /** _np_row — current pattern row; also the `row` component of Cue.atOrderRow (order<<8|row). TECHNO uses musrow & 7 for the beat. */
   musrow: number;
