@@ -29,6 +29,9 @@ importers:
       '@sr/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@sr/parts':
+        specifier: workspace:*
+        version: link:../../packages/parts
       three:
         specifier: ^0.179.0
         version: 0.179.1
@@ -52,6 +55,19 @@ importers:
       chiptune3:
         specifier: ^0.8.7
         version: 0.8.7
+
+  packages/parts:
+    dependencies:
+      '@sr/engine':
+        specifier: workspace:*
+        version: link:../engine
+      three:
+        specifier: ^0.179.0
+        version: 0.179.1
+    devDependencies:
+      '@types/three':
+        specifier: ^0.179.0
+        version: 0.179.0
 
 packages:
 
