@@ -1,4 +1,4 @@
-import type { WebGPURenderer } from 'three/webgpu';
+import type { RenderTarget as GpuRenderTarget, WebGPURenderer } from 'three/webgpu';
 
 export type Backend = 'webgpu' | 'webgl2';
 
@@ -36,13 +36,14 @@ export interface FrameContext {
 }
 
 /**
- * An off-screen color target an effect renders into (so the sequencer can cross-fade two live
- * effects). Geometry-only stub for now: the GPU handle (render-target texture/FBO) is added when
- * the sequencer / render-target pool lands (Plan 04). Mocks against this will extend, not break.
+ * An off-screen colour target an effect renders into (so the sequencer can later cross-fade two
+ * live effects). Wraps a Three.js render target; effects draw into `gpu` and the host blits/composites
+ * `gpu.texture`.
  */
 export interface RenderTarget {
   readonly width: number;
   readonly height: number;
+  readonly gpu: GpuRenderTarget;
 }
 
 /** Shared, long-lived services. The modern injected DIS — no globals, no singletons. */
