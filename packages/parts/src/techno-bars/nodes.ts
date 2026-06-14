@@ -16,9 +16,9 @@ import {
 import { clamp, max, texture as textureNode, uniform, uv, vec2, vec3 } from 'three/tsl';
 import {
   AdditiveBlending,
+  RenderTarget as GpuRenderTarget,
   MeshBasicNodeMaterial,
   QuadMesh,
-  RenderTarget as GpuRenderTarget,
   type WebGPURenderer,
 } from 'three/webgpu';
 import type { Quad } from './geometry.js';
@@ -210,7 +210,12 @@ export class PaletteResolve {
   }
 
   /** Resolve `sourceTex` (the trail) into `target`, brightened by the beat-flash level (0..15). */
-  render(renderer: WebGPURenderer, sourceTex: Texture, target: GpuRenderTarget, flash: number): void {
+  render(
+    renderer: WebGPURenderer,
+    sourceTex: Texture,
+    target: GpuRenderTarget,
+    flash: number,
+  ): void {
     this.sourceNode.value = sourceTex;
     this.flashUniform.value = flash;
     renderer.setRenderTarget(target);

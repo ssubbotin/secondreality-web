@@ -39,7 +39,9 @@ export class TechnoBars implements Effect {
   init(ctx: DemoContext): void {
     this.ctx = ctx;
     // Half-float so additive overlap counts and the feedback trail can exceed 1.0.
-    this.accum = new GpuRenderTarget(ctx.viewport.width, ctx.viewport.height, { type: HalfFloatType });
+    this.accum = new GpuRenderTarget(ctx.viewport.width, ctx.viewport.height, {
+      type: HalfFloatType,
+    });
     this.bars = new BarLayer();
     this.trail = new Trail(this.accum.texture, ctx.viewport.width, ctx.viewport.height);
     this.palette = new PaletteResolve(this.accum.texture);
