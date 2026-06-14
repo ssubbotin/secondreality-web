@@ -10,6 +10,7 @@ import {
   OrthographicCamera,
   RGBAFormat,
   Scene,
+  SRGBColorSpace,
   type Texture,
   UnsignedByteType,
 } from 'three';
@@ -191,6 +192,10 @@ export class PaletteResolve {
     this.lut = new DataTexture(data, 16, 16, RGBAFormat, UnsignedByteType);
     this.lut.minFilter = NearestFilter;
     this.lut.magFilter = NearestFilter;
+    // The palette holds literal VGA DAC bytes (6-bit→8-bit). Tag the LUT sRGB so the sample-decode
+    // and the output-pass sRGB-encode cancel: the raw bytes land on the canvas verbatim, instead of
+    // being treated as linear and brightened/desaturated into a grey wash.
+    this.lut.colorSpace = SRGBColorSpace;
     this.lut.needsUpdate = true;
 
     this.p0 = textureNode(planes[0], uv());
