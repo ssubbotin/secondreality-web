@@ -5,6 +5,7 @@ import { runEffect } from './run-effect.js';
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud') as HTMLDivElement;
 const playBtn = document.getElementById('play') as HTMLButtonElement;
+const authBox = document.getElementById('authentic') as HTMLInputElement;
 
 const forced = new URLSearchParams(location.search).get('backend') as Backend | null;
 const handle = createRenderer({
@@ -34,4 +35,9 @@ try {
   throw err;
 }
 
-await runEffect(new TechnoBars(), { handle, canvas, audio, music });
+const effect = new TechnoBars();
+authBox.addEventListener('change', () => {
+  effect.setMode(authBox.checked ? 'authentic' : 'modern');
+});
+
+await runEffect(effect, { handle, canvas, audio, music });

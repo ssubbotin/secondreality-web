@@ -1,8 +1,15 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
-import { HalfFloatType } from 'three';
+import { HalfFloatType, LinearFilter, NearestFilter } from 'three';
 import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
 import { barQuads, type Quad } from './geometry.js';
 import { BarLayer, PaletteResolve, Trail } from './nodes.js';
+
+/** Authentic = chunky mode-X-resolution indexed look; modern = full-resolution smooth (default). */
+export type LookMode = 'authentic' | 'modern';
+
+/** Internal accumulation height in authentic mode (chunky mode-X pixels, upscaled to the canvas). */
+const AUTHENTIC_HEIGHT = 240;
+
 import {
   BEAT_FLASH_LEVEL,
   beatFlashDecay,
@@ -21,6 +28,9 @@ export class TechnoBars implements Effect {
   readonly id = 'techno-bars';
 
   private ctx: DemoContext | null = null;
+  private mode: LookMode = 'modern';
+  private vpW = 1;
+  private vpH = 1;
   private accum: GpuRenderTarget | null = null;
   private bars: BarLayer | null = null;
   private trail: Trail | null = null;
@@ -38,16 +48,39 @@ export class TechnoBars implements Effect {
 
   init(ctx: DemoContext): void {
     this.ctx = ctx;
-    // Half-float so additive overlap counts and the feedback trail can exceed 1.0.
-    this.accum = new GpuRenderTarget(ctx.viewport.width, ctx.viewport.height, {
-      type: HalfFloatType,
-    });
+    this.vpW = ctx.viewport.width;
+    this.vpH = ctx.viewport.height;
     this.bars = new BarLayer();
-    this.trail = new Trail(this.accum.texture, ctx.viewport.width, ctx.viewport.height);
-    this.palette = new PaletteResolve(this.accum.texture);
+    this.rebuildTargets(); // sized for the current mode (creates accum + trail)
+    this.palette = new PaletteResolve((this.accum as GpuRenderTarget).texture);
     this.simState = initPhaseA();
     this.simClock = 0;
     this.acc = 0;
+  }
+
+  /** dis_setmode equivalent — switch the authentic↔modern look (default modern). */
+  setMode(mode: LookMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    if (this.ctx) this.rebuildTargets(); // re-size the internal targets to the new mode
+  }
+
+  /** Internal accumulation/trail resolution: full viewport (modern) or chunky mode-X (authentic). */
+  private internalSize(): { width: number; height: number } {
+    if (this.mode === 'modern') return { width: this.vpW, height: this.vpH };
+    const height = AUTHENTIC_HEIGHT;
+    return { width: Math.max(1, Math.round((height * this.vpW) / this.vpH)), height };
+  }
+
+  /** (Re)create the half-float accumulation + trail at the mode's resolution and filtering. */
+  private rebuildTargets(): void {
+    const { width, height } = this.internalSize();
+    this.trail?.dispose();
+    this.accum?.dispose();
+    // Half-float so additive overlap counts and the feedback trail can exceed 1.0.
+    this.accum = new GpuRenderTarget(width, height, { type: HalfFloatType });
+    this.trail = new Trail(this.accum.texture, width, height);
+    this.trail.setFilter(this.mode === 'authentic' ? NearestFilter : LinearFilter);
   }
 
   update(frame: FrameContext): void {
@@ -89,8 +122,9 @@ export class TechnoBars implements Effect {
   }
 
   resize(width: number, height: number): void {
-    this.accum?.setSize(width, height);
-    this.trail?.setSize(width, height);
+    this.vpW = width;
+    this.vpH = height;
+    this.rebuildTargets();
   }
 
   dispose(): void {

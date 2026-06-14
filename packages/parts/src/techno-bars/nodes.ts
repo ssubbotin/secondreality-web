@@ -5,6 +5,7 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   HalfFloatType,
+  type MagnificationTextureFilter,
   Mesh,
   NearestFilter,
   OrthographicCamera,
@@ -155,6 +156,15 @@ export class Trail {
   setSize(width: number, height: number): void {
     this.targetA.setSize(width, height);
     this.targetB.setSize(width, height);
+  }
+
+  /** Crisp (NearestFilter) vs smooth (LinearFilter) upscaling of the trail to the output. */
+  setFilter(filter: MagnificationTextureFilter): void {
+    for (const t of [this.targetA, this.targetB]) {
+      t.texture.minFilter = filter;
+      t.texture.magFilter = filter;
+      t.texture.needsUpdate = true;
+    }
   }
 
   dispose(): void {
