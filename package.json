@@ -10,7 +10,6 @@
     "dev": "pnpm build:worklet && pnpm --filter @sr/lab dev",
     "build": "pnpm build:worklet && pnpm -r --filter './packages/*' build && pnpm --filter @sr/lab build",
     "build:worklet": "node scripts/build-worklet.mjs",
-    "extract:markers": "node scripts/extract-markers.mjs",
     "typecheck": "tsc -b --pretty",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

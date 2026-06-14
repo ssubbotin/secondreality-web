@@ -1,34 +1,49 @@
-import { absRowOf, type MarkerTable } from './marker-table.js';
-
 export interface SyncChannels {
-  /** np_zinfo: the most recent Zxx code at-or-before the current position (0 = none yet). */
+  /** np_zinfo: set only by the ScreamTracker-3 Zxx command. The shipped FC modules carry none, so 0. */
   muscode: number;
-  /** np_zplus-derived: signed distance to the nearest bar boundary, [-32, +31]. The dominant primitive parts poll. */
+  /** dis_musplus(): the clamped signed row-distance DX, range [-32, +32]. The dominant primitive parts poll. */
   musplus: number;
   /** np_row: the current within-pattern row (parts use musrow & 7 for the beat). */
   musrow: number;
 }
 
-const ROWS_PER_PATTERN = 64;
-
 /**
- * Signed distance to the nearest bar (pattern) boundary: positive = rows since the last bar,
- * negative = rows until the next. Range [-rowsPerPattern/2, +rowsPerPattern/2 - 1].
- * Reproduces the original musplus thresholds (GLENZ -19, TECHNO -4, PLZPART +13, ...).
+ * dis_musplus() — the signed countdown the parts actually compare against (GLENZ `<-19`,
+ * TECHNO `<-4`, PLZPART `<13`, LENS `<-6/<-20`, WATER `cmp dx,-11`, ...). It is NOT a raw player
+ * global: the DIS service muscode_6 computes register DX live from the row, clamped to [-32, +32],
+ * using np_zplus (0..3) only as a phase selector. Reproduced verbatim from DIS/DISINT.ASM:252-271:
+ *
+ *   zplus 0  -> -32                       (no +++ marker in play; parked)
+ *   zplus 1  -> max(row-64, -32)          (+++ ahead: parked at -32, then counting down to the next marker)
+ *   zplus 2  -> row<32 ? row : -32        (+++ behind: counting up from the last marker, then parked at -32)
+ *   zplus 3  -> row>32 ? max(row-64,-32) : (row<32 ? row : -32)   (markers both sides; symmetric)
+ *
+ * zplus==3 (the common case for a section bracketed by +++ markers) reduces to the familiar
+ * `row<32 ? row : row-64`, which is why a naive bar-distance "mostly works by ear".
  */
-export function musplusFromRow(row: number, rowsPerPattern = ROWS_PER_PATTERN): number {
-  const half = rowsPerPattern / 2;
-  return row < half ? row : row - rowsPerPattern;
+export function computeMusplus(zplus: number, row: number): number {
+  switch (zplus) {
+    case 1:
+      return Math.max(row - 64, -32);
+    case 2:
+      return row < 32 ? row : -32;
+    case 3:
+      return row > 32 ? Math.max(row - 64, -32) : row < 32 ? row : -32;
+    default:
+      return -32; // zplus 0 (or unknown)
+  }
 }
 
-/** Reproduce the DIS muscode_6 channels from the marker table and the live (order,row). */
-export function reconstructSync(table: MarkerTable, order: number, row: number): SyncChannels {
-  const p = absRowOf(table, order, row);
-  // muscode = code of the latest marker at-or-before p (np_zinfo holds until the next Zxx).
-  let muscode = 0;
-  for (const m of table.markers) {
-    if (m.absRow <= p) muscode = m.code;
-    else break; // markers are sorted by absRow
-  }
-  return { muscode, musplus: musplusFromRow(row), musrow: row };
+/**
+ * Reproduce the DIS muscode_6 channels from the live within-pattern row.
+ *
+ * `muscode` (np_zinfo) is set only by the ST3 Zxx command — both shipped modules (MUSIC0/MUSIC1)
+ * carry zero Zxx, so it holds its initial 0. `musrow` is the raw row. `musplus` is computed from
+ * the row via {@link computeMusplus}; `zplus` defaults to 3 — the value for a section bracketed by
+ * `+++` order markers (the dominant case). Deriving the true per-order `zplus` from the module's
+ * `+++` order-list markers is deferred until effects consume musplus and the order-list mapping can
+ * be confirmed by ear (libopenmpt collapses `+++` entries — see DIS/DISINT.ASM:252-271, STMIK 0x442d).
+ */
+export function reconstructSync(row: number, zplus = 3): SyncChannels {
+  return { muscode: 0, musplus: computeMusplus(zplus, row), musrow: row };
 }

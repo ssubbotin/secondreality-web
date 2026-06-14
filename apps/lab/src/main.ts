@@ -1,11 +1,4 @@
-import {
-  AudioEngine,
-  type Backend,
-  createRenderer,
-  type MarkerTable,
-  MusicSync,
-  startLoop,
-} from '@sr/engine';
+import { AudioEngine, type Backend, createRenderer, MusicSync, startLoop } from '@sr/engine';
 import { BoxGeometry, Mesh, PerspectiveCamera, Scene } from 'three';
 import { positionLocal, vec4 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
@@ -35,16 +28,16 @@ material.colorNode = vec4(positionLocal.add(0.5), 1.0);
 const cube = new Mesh(new BoxGeometry(1, 1, 1), material);
 scene.add(cube);
 
+// ?music=1 plays the techno module (MUSIC1: GLENZ/TECHNO/LENS/...); default is MUSIC0 (cinematic).
+const musicId = new URLSearchParams(location.search).get('music') === '1' ? '1' : '0';
+
 const audio = new AudioEngine({
   workletUrl: '/worklets/player-worklet.js',
-  moduleUrl: '/music/MUSIC0.S3M',
+  moduleUrl: `/music/MUSIC${musicId}.S3M`,
 });
 
-const markerTable = (await fetch('/music/markers-music0.json').then((r) =>
-  r.json(),
-)) as MarkerTable;
-const music = new MusicSync(markerTable);
-let lastMuscode = -1;
+const music = new MusicSync();
+let lastRow = -1;
 let flash = 0;
 
 playBtn.addEventListener('click', async () => {
@@ -80,10 +73,10 @@ resize();
 startLoop((dt) => {
   const clk = music.resolve(audio.sample());
 
-  // Pulse the cube when a new Zxx marker fires (muscode changes); spin stays song-time driven.
-  if (clk.muscode !== lastMuscode) {
-    lastMuscode = clk.muscode;
-    flash = 1;
+  // Pulse the cube on each musical beat (every 8 rows of the 64-row bar); spin stays song-time driven.
+  if (clk.musrow !== lastRow) {
+    if (clk.musrow % 8 === 0) flash = 1;
+    lastRow = clk.musrow;
   }
   flash = Math.max(0, flash - dt * 4);
   cube.rotation.y = clk.songSeconds * 1.2;

@@ -1,23 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { ClockSample } from '../audio/clock.js';
-import type { MarkerTable } from './marker-table.js';
 import { MusicSync } from './music-sync.js';
 
-const table: MarkerTable = {
-  module: 'TEST',
-  channels: 8,
-  totalRows: 128,
-  orderStartRow: [0, 64],
-  markers: [{ absRow: 4, order: 0, row: 4, ch: 0, code: 0x5b }],
-};
 const base: ClockSample = { songSeconds: 10, order: 1, row: 13, pattern: 9, bpm: 125 };
 
 describe('MusicSync', () => {
   it('resolves a base ClockSample into the full four-channel MusicClock', () => {
-    const sync = new MusicSync(table);
+    const sync = new MusicSync();
     const c = sync.resolve(base);
-    expect(c.muscode).toBe(0x5b); // last marker at-or-before order1/row13
-    expect(c.musplus).toBe(13); // row 13 -> +13 (first half of bar)
+    expect(c.muscode).toBe(0); // no Zxx in the shipped modules
+    expect(c.musplus).toBe(13); // row 13, bracketed section (zplus 3) -> +13
     expect(c.musrow).toBe(13);
     expect(c.songSeconds).toBe(10);
     expect(c.order).toBe(1);
@@ -25,10 +17,13 @@ describe('MusicSync', () => {
     expect(c.bpm).toBe(125);
   });
 
-  it('mframe respects setMframe (part-resettable)', () => {
-    const sync = new MusicSync(table);
-    sync.setMframe(10, 0);
+  it('mframe is a tempo-driven tick count, resettable via setMframe', () => {
+    const sync = new MusicSync();
+    // 10s @ 125 BPM = 500 ticks; with no reset, mframe reads the absolute tick count.
+    expect(sync.resolve(base).mframe).toBe(500);
+    sync.setMframe(0); // reset "now" (still at 500 ticks)
     expect(sync.resolve(base).mframe).toBe(0);
-    expect(sync.resolve({ ...base, songSeconds: 11 }).mframe).toBe(70); // +1s at 70Hz
+    // +1s @ 125 BPM = +50 ticks.
+    expect(sync.resolve({ ...base, songSeconds: 11 }).mframe).toBe(50);
   });
 });
