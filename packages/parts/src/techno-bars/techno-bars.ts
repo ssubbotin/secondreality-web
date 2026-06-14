@@ -57,9 +57,13 @@ export class TechnoBars implements Effect {
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       this.simClock += SIM_DT;
-      // Phase A then B, self-advancing (sequencer will gate entry later via musplus/mframe).
+      // Phase A → B → A, self-advancing (the sequencer will gate entry via musplus/mframe later).
       if (this.simState.kind === 'A' && this.simClock >= PHASE_A_SECONDS) {
         this.simState = initPhaseB();
+        this.simClock = 0;
+      } else if (this.simState.kind === 'B' && this.simClock >= PHASE_B_SECONDS) {
+        this.simState = initPhaseA();
+        this.simClock = 0;
       }
       this.simState = stepPhase(this.simState);
       this.flash = beatFlashDecay(this.flash);

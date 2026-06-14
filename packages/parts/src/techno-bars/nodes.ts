@@ -20,8 +20,8 @@ import {
   QuadMesh,
   type WebGPURenderer,
 } from 'three/webgpu';
-import { buildTechnoPalette } from './palette.js';
 import type { Quad } from './geometry.js';
+import { buildTechnoPalette } from './palette.js';
 
 const QUAD_COUNT = 11;
 const VERTS_PER_QUAD = 6; // two triangles
