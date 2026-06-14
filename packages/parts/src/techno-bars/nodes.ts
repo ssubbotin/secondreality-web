@@ -113,9 +113,10 @@ export class BarLayer {
 }
 
 /**
- * Two-target ping-pong feedback: `out = current + fade·previous`, recreating the original's
- * page-flip motion accumulation so the rotating bars leave fading trails. Targets are half-float so
- * the accumulation can exceed 1.0. `render` returns the freshly written trail texture each frame.
+ * Two-target ping-pong feedback: `out = max(current, fade·previous)`, recreating the original's
+ * page-flip motion accumulation so the rotating bars leave fading trails (bounded, so the centre
+ * stays defined). Targets are half-float so values can exceed 1.0. `render` returns the freshly
+ * written trail texture each frame.
  */
 export class Trail {
   private targetA: GpuRenderTarget;

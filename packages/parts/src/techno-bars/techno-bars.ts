@@ -3,13 +3,6 @@ import { HalfFloatType, LinearFilter, NearestFilter } from 'three';
 import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
 import { barQuads, type Quad } from './geometry.js';
 import { BarLayer, PaletteResolve, Trail } from './nodes.js';
-
-/** Authentic = chunky mode-X-resolution indexed look; modern = full-resolution smooth (default). */
-export type LookMode = 'authentic' | 'modern';
-
-/** Internal accumulation height in authentic mode (chunky mode-X pixels, upscaled to the canvas). */
-const AUTHENTIC_HEIGHT = 240;
-
 import {
   BEAT_FLASH_LEVEL,
   beatFlashDecay,
@@ -18,6 +11,12 @@ import {
   type PhaseState,
   stepPhase,
 } from './phase.js';
+
+/** Authentic = chunky mode-X-resolution indexed look; modern = full-resolution smooth (default). */
+export type LookMode = 'authentic' | 'modern';
+
+/** Internal accumulation height in authentic mode (chunky mode-X pixels, upscaled to the canvas). */
+const AUTHENTIC_HEIGHT = 240;
 
 const SIM_HZ = 70; // original mode-X frame cadence
 const SIM_DT = 1 / SIM_HZ;
