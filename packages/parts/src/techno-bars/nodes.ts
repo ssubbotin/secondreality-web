@@ -49,9 +49,9 @@ export class BarLayer {
   private readonly intensityUniform = uniform(1);
   private readonly material = new MeshBasicNodeMaterial();
   private readonly scene = new Scene();
-  // Frame a region well larger than 320×200 and centred on (160,100): the bar formation reaches
-  // ~±300 px from centre, so a 1:1 frame would be entirely overfilled. Y increases downward.
-  private readonly camera = new OrthographicCamera(-340, 660, -212, 412, -1, 1);
+  // Frame the original 320×200 space (centre 160,100, Y down). The long bars overfill it — exactly
+  // as on the original 320×200 screen, so the formation reaches the edges instead of floating.
+  private readonly camera = new OrthographicCamera(0, 320, 0, 200, -1, 1);
 
   constructor() {
     this.geometry.setAttribute('position', this.attribute);
