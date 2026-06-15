@@ -1,12 +1,16 @@
-# scripts/extract-rotozoom.py — convert the original LENS background into the rotozoomer texture.
+# scripts/extract-rotozoom.py — convert the original LENS background into the rotozoomer INDEX texture.
 # Source: /home/sergey/SecondReality/LENS/_LENSEXB.OBK (OMF: 16B header + 768B 6-bit palette + 320x200).
-# Output: apps/lab/public/textures/rotozoom.png (256x256 RGB, the tiling rotpic from MAIN.C:359-368).
+# Output: apps/lab/public/textures/rotozoom-index.png (256x256, the rotpic crop from MAIN.C:359-368, with
+# the raw palette INDEX stored in R/G/B). The effect colours it through a vivid palette LUT at runtime — the
+# original rotozoomer's look comes from the palette over the index gradient, not the (brown) base palette.
 import os
 import struct
 import zlib
 
 OBK = os.environ.get("LENS_OBK", "/home/sergey/SecondReality/LENS/_LENSEXB.OBK")
-OUT = os.path.join(os.path.dirname(__file__), "..", "apps", "lab", "public", "textures", "rotozoom.png")
+OUT = os.path.join(
+    os.path.dirname(__file__), "..", "apps", "lab", "public", "textures", "rotozoom-index.png"
+)
 
 
 def linear_from_obk(path):
@@ -45,18 +49,18 @@ def write_png(path, w, h, rgb):
 
 
 buf = linear_from_obk(OBK)
-pal = buf[16 : 16 + 768]
-img = buf[784 : 784 + 64000]  # 320x200
-rgb = bytearray(256 * 256 * 3)
+img = buf[784 : 784 + 64000]  # 320x200 palette indices
+idx = bytearray(256 * 256 * 3)
 for y in range(256):
     a = (y * 10) // 11 - 18
     if a < 0 or a > 199:
         a = 0
     for x in range(256):
-        c = img[x + 32 + a * 320]
-        rgb[(x + y * 256) * 3 + 0] = min(255, pal[c * 3 + 0] * 4)
-        rgb[(x + y * 256) * 3 + 1] = min(255, pal[c * 3 + 1] * 4)
-        rgb[(x + y * 256) * 3 + 2] = min(255, pal[c * 3 + 2] * 4)
+        c = img[x + 32 + a * 320]  # raw palette index 0..63
+        o = (x + y * 256) * 3
+        idx[o + 0] = c
+        idx[o + 1] = c
+        idx[o + 2] = c
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
-write_png(OUT, 256, 256, rgb)
+write_png(OUT, 256, 256, idx)
 print("wrote", os.path.abspath(OUT))
