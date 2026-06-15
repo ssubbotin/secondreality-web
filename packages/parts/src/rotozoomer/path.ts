@@ -40,7 +40,7 @@ export function stepPath(s: PathState): {
   d2 += d3;
   // (pose is emitted here, then the rates evolve for the next frame)
   scale += scalea;
-  if (frame >= 25 && d3 < 0.02) d3 += 0.00005;
+  if (frame > 25 && d3 < 0.02) d3 += 0.00005; // verbatim MAIN.C: if(frame>25) (frame is pre-increment here)
   if (frame < 270) {
     if (scale < 0.9 && scalea < 1) scalea += 0.0001;
   } else if (frame < 400) {

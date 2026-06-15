@@ -13,11 +13,12 @@ describe('rotozoomer path', () => {
     expect(r.state.d1).toBeCloseTo(-0.005, 5);
   });
 
-  it('spin acceleration (d3) only starts after frame 25', () => {
+  it('spin acceleration (d3) only starts after frame 25 (fires at the frame-26 step)', () => {
     let s = INIT_PATH;
-    for (let i = 0; i < 25; i++) s = stepPath(s).state;
-    expect(s.d3).toBe(0); // still 0 at frame 25
-    s = stepPath(s).state; // frame 25 → 26
+    // 26 steps cover incoming frames 0..25; `frame > 25` has not fired yet.
+    for (let i = 0; i < 26; i++) s = stepPath(s).state;
+    expect(s.d3).toBe(0);
+    s = stepPath(s).state; // incoming frame 26 → 26 > 25 → fires
     expect(s.d3).toBeCloseTo(0.00005, 6);
   });
 
