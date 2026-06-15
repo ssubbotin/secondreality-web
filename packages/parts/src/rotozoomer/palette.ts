@@ -1,42 +1,29 @@
 /**
- * The rotozoomer colours the face's index gradient (0..63) through a vivid spectrum, reproducing the
- * original's colourful look (its real palette is not in our LENS source; this is a tuned reconstruction
- * matching the reference screencast). A full-hue sweep turns the smooth shading into smooth rainbow bands.
+ * The authentic rotozoomer palette — the VGA register content the original writes for indices 0..63
+ * during LENS part3 (`_LENSEXB.OBK` palette, 6-bit → 8-bit ×4). It is a triad, NOT a rainbow: black,
+ * a warm cream→red-brown ramp (1..31), a dark-orange→bright-yellow band (32..47, peaking at pure
+ * yellow), and a cool blue-grey band (48..63). The face image's smooth index gradient mapped through
+ * this is the rotozoomer's colour — warm gradients, bright-yellow glints, or cool blue depending on
+ * which index region the rotation/zoom reveals.
  */
 
 /** Palette entry count (the rotpic uses indices 0..63). */
 export const ROTO_PALETTE_SIZE = 64;
 
-/** HSV → RGB (h in [0,6) hue sectors, s/v in [0,1]); returns three 0..255 bytes. */
-export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
-  const c = v * s;
-  const x = c * (1 - Math.abs((h % 2) - 1));
-  const m = v - c;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (h < 1) [r, g, b] = [c, x, 0];
-  else if (h < 2) [r, g, b] = [x, c, 0];
-  else if (h < 3) [r, g, b] = [0, c, x];
-  else if (h < 4) [r, g, b] = [0, x, c];
-  else if (h < 5) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
-}
+// prettier-ignore
+const PALETTE: readonly number[] = [
+  0, 0, 0, 240, 204, 180, 232, 192, 168, 224, 184, 156, 216, 172, 148, 212, 164, 136, 204, 156, 128,
+  196, 148, 116, 188, 140, 108, 180, 128, 96, 176, 120, 88, 168, 112, 80, 164, 104, 76, 156, 96, 68,
+  148, 92, 60, 144, 84, 56, 136, 76, 48, 128, 68, 40, 124, 64, 36, 116, 56, 32, 112, 52, 28, 104,
+  44, 20, 96, 40, 16, 92, 32, 12, 84, 28, 12, 76, 24, 8, 72, 20, 4, 64, 16, 4, 60, 12, 0, 52, 8, 0,
+  44, 4, 0, 36, 4, 0, 64, 4, 0, 76, 8, 0, 88, 16, 0, 100, 24, 0, 112, 36, 0, 128, 48, 0, 140, 60, 0,
+  152, 76, 0, 164, 92, 0, 176, 112, 0, 188, 128, 0, 204, 152, 0, 216, 176, 0, 228, 200, 0, 240, 224,
+  0, 252, 252, 0, 140, 144, 176, 128, 132, 164, 120, 124, 156, 108, 116, 148, 100, 108, 136, 92,
+  100, 128, 84, 92, 120, 76, 84, 112, 68, 80, 104, 60, 72, 96, 52, 64, 88, 48, 60, 80, 40, 52, 72,
+  32, 48, 64, 28, 40, 56, 24, 36, 48,
+];
 
-/**
- * Build the 64-entry vivid palette (RGB bytes, 0..255). The hue sweeps the full circle across the index
- * gradient; the lowest indices (the image's black background) ramp up from black so the background stays
- * dark instead of a flat colour, matching the original's look.
- */
+/** Build the authentic 64-entry rotozoomer palette (RGB bytes, 0..255). */
 export function buildRotozoomPalette(): Uint8Array {
-  const out = new Uint8Array(ROTO_PALETTE_SIZE * 3);
-  for (let i = 0; i < ROTO_PALETTE_SIZE; i++) {
-    const v = Math.min(1, i / 5); // index 0 → black, 5+ → full brightness
-    const [r, g, b] = hsvToRgb((i / ROTO_PALETTE_SIZE) * 6, 1, v);
-    out[i * 3] = r;
-    out[i * 3 + 1] = g;
-    out[i * 3 + 2] = b;
-  }
-  return out;
+  return Uint8Array.from(PALETTE);
 }
