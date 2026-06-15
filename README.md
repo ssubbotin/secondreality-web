@@ -8,6 +8,9 @@ soundtrack, every effect recognizable, but rendered sharp at high resolution and
 Built on TypeScript (strict) · Three.js (`three/webgpu` + TSL, WebGL2 co-primary) · libopenmpt in an
 AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 
+**▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
+(single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
+
 > **Status: foundation complete, 1 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
 > master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place and the
 > first effect (Techno bars) is faithful and merged. The remaining 19 parts are being ported one at a time.
