@@ -43,6 +43,7 @@ export class Plasma implements Effect {
   private fade = FADE_FRAMES; // frames into the current cross-fade (starts settled)
   private mframe = 0; // elapsed mframes since (re)start
   private acc = 0;
+  private settled = false; // true once the settled palette has been uploaded (skips per-frame churn)
 
   async load(_ctx: LoadContext): Promise<void> {
     // No external assets — tables are code.
@@ -61,6 +62,7 @@ export class Plasma implements Effect {
     this.fade = FADE_FRAMES;
     this.mframe = 0;
     this.acc = 0;
+    this.settled = false;
   }
 
   /** dis_setmode equivalent — switch the authentic↔modern upscale filter (default modern). */
@@ -92,6 +94,7 @@ export class Plasma implements Effect {
         this.fromSection = 0;
         this.fade = FADE_FRAMES;
         this.k = INITK0;
+        this.settled = false;
       }
       const passed = Math.min(sectionsPassed(this.mframe), this.palettes.length - 1);
       if (passed !== this.section) {
@@ -99,13 +102,23 @@ export class Plasma implements Effect {
         this.section = passed;
         this.fade = 0; // begin a fresh cross-fade
         this.k = INITTABLE_K[passed] ?? this.k;
+        this.settled = false;
       }
       if (this.fade < FADE_FRAMES) this.fade++;
     }
     const from = this.palettes[this.fromSection];
     const to = this.palettes[this.section];
     this.field?.setPhase(this.k);
-    if (from && to) this.field?.setPalette(crossFade(from, to, this.fade / FADE_FRAMES));
+    if (from && to) {
+      // While a cross-fade is in progress, rebuild the blended LUT each frame; once settled, upload
+      // the target palette once and stop re-allocating/re-uploading it every frame.
+      if (this.fade < FADE_FRAMES) {
+        this.field?.setPalette(crossFade(from, to, this.fade / FADE_FRAMES));
+      } else if (!this.settled) {
+        this.field?.setPalette(to);
+        this.settled = true;
+      }
+    }
   }
 
   render(_frame: FrameContext, target: RenderTarget): void {

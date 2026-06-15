@@ -66,8 +66,12 @@ export class PlasmaField {
 
     const l16 = fetch(this.lsini16, mod(y.mul(2).add(this.p2), 8192), 8192);
     const l4 = fetch(this.lsini4, mod(x.mul(64).add(this.p4), 8192), 8192);
-    const a1 = mod(x.mul(32).add(l16.mul(16)).add(this.p1), 16384);
-    const a2 = mod(y.mul(4).add(l4.mul(4)).add(this.p3), 16384);
+    // lsini16/lsini4 are PRE-SCALED in their generators (×16 / ×8), so they are added in as direct
+    // psini offsets — the original rasterizer (ASMYT.ASM plzline) loads the word value and adds it
+    // straight in. The PLZSINI macro's extra ×16/×4 scaled an UNSCALED byte table; re-applying it to
+    // the pre-scaled tables would double-scale and 8–16× the cross-modulation frequency.
+    const a1 = mod(x.mul(32).add(l16).add(this.p1), 16384);
+    const a2 = mod(y.mul(4).add(l4).add(this.p3), 16384);
     const idx = mod(fetch(this.psini, a1, 16384).add(fetch(this.psini, a2, 16384)), 256);
 
     this.material.colorNode = textureNode(this.lut, vec2(idx.add(float(0.5)).div(256), 0.5));
