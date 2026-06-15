@@ -7,7 +7,7 @@ import {
   SRGBColorSpace,
   UnsignedByteType,
 } from 'three';
-import { float, mod, texture as textureNode, uniform, uv, vec2 } from 'three/tsl';
+import { float, floor, mod, texture as textureNode, uniform, uv, vec2 } from 'three/tsl';
 import {
   type RenderTarget as GpuRenderTarget,
   MeshBasicNodeMaterial,
@@ -51,6 +51,11 @@ export class PlasmaField {
   private readonly p2 = uniform(2300);
   private readonly p3 = uniform(3900);
   private readonly p4 = uniform(3670);
+  // The second, scanline-interlaced parameter set (l1..l4).
+  private readonly pl1 = uniform(1000);
+  private readonly pl2 = uniform(2000);
+  private readonly pl3 = uniform(3000);
+  private readonly pl4 = uniform(4000);
   private readonly material = new MeshBasicNodeMaterial();
   private readonly quad: QuadMesh;
 
@@ -75,34 +80,46 @@ export class PlasmaField {
     // NearestFilter upscale of the 320×280 field target, not from quantising the field here.
     const ccc = uv().x.mul(PLASMA_COLS);
     const yy = uv().y.mul(PLASMA_LINES);
-    // Exact setplzparas (ASMYT.ASM) index arithmetic. lsini16/lsini4 are PRE-SCALED (×16/×8) in their
-    // generators, so they add straight into the psini index. The +320 constants are setplzparas's
-    // OFFSET +80*8 (lsini16, word) / +80*4 (psini, byte). (+ a multiple of the size keeps mod ≥ 0.)
-    //   l16 = lsini16[yy − 4·ccc + p2 + 320] ;  l4 = lsini4[yy + 16·ccc + p4]
-    //   a1  = 8·ccc + l16 + p1             ;  a2 = 2·yy − 4·ccc + l4 + p3 + 320
-    const l16 = fetch(
-      this.lsini16,
-      mod(
-        yy
-          .sub(ccc.mul(4))
-          .add(this.p2)
-          .add(320 + 8192),
+    // The 8-bit field index for ONE parameter set (q1..q4). Exact setplzparas (ASMYT.ASM) arithmetic;
+    // lsini16/lsini4 are PRE-SCALED (×16/×8) so they add straight in; the +320 constants are
+    // setplzparas's OFFSET +80*8 (lsini16, word) / +80*4 (psini, byte). A multiple of the table size
+    // keeps each mod argument non-negative.
+    //   l16 = lsini16[yy − 4·ccc + q2 + 320] ;  l4 = lsini4[yy + 16·ccc + q4]
+    //   a1  = 8·ccc + l16 + q1              ;  a2 = 2·yy − 4·ccc + l4 + q3 + 320
+    type Node = ReturnType<typeof uniform>;
+    const fieldIdx = (q1: Node, q2: Node, q3: Node, q4: Node) => {
+      const l16 = fetch(
+        this.lsini16,
+        mod(
+          yy
+            .sub(ccc.mul(4))
+            .add(q2)
+            .add(320 + 8192),
+          8192,
+        ),
         8192,
-      ),
-      8192,
-    );
-    const l4 = fetch(this.lsini4, mod(yy.add(ccc.mul(16)).add(this.p4), 8192), 8192);
-    const a1 = mod(ccc.mul(8).add(l16).add(this.p1), 16384);
-    const a2 = mod(
-      yy
-        .mul(2)
-        .sub(ccc.mul(4))
-        .add(l4)
-        .add(this.p3)
-        .add(320 + 16384),
-      16384,
-    );
-    const idx = mod(fetch(this.psini, a1, 16384).add(fetch(this.psini, a2, 16384)), 256);
+      );
+      const l4 = fetch(this.lsini4, mod(yy.add(ccc.mul(16)).add(q4), 8192), 8192);
+      const a1 = mod(ccc.mul(8).add(l16).add(q1), 16384);
+      const a2 = mod(
+        yy
+          .mul(2)
+          .sub(ccc.mul(4))
+          .add(l4)
+          .add(q3)
+          .add(320 + 16384),
+        16384,
+      );
+      return mod(fetch(this.psini, a1, 16384).add(fetch(this.psini, a2, 16384)), 256);
+    };
+    // Original scanline interlace (PLZ.C plz(): SC plane masks 0x0A/0x05 over even/odd line passes):
+    // the k or l parameter set is chosen per pixel — k when (x+y) is odd, l when even. The two sets
+    // diverge over time (different moveplz rates), so this dithers two phases of the field. Modern's
+    // Linear upscale blends the checkerboard (the CRT look); authentic keeps it crisp.
+    const idxK = fieldIdx(this.p1, this.p2, this.p3, this.p4);
+    const idxL = fieldIdx(this.pl1, this.pl2, this.pl3, this.pl4);
+    const parity = mod(floor(uv().x.mul(PLASMA_W)).add(floor(uv().y.mul(PLASMA_H))), 2);
+    const idx = idxL.mul(parity.oneMinus()).add(idxK.mul(parity));
 
     this.material.colorNode = textureNode(this.lut, vec2(idx.add(float(0.5)).div(256), 0.5));
     this.quad = new QuadMesh(this.material);
@@ -120,12 +137,19 @@ export class PlasmaField {
     this.lut.needsUpdate = true;
   }
 
-  /** Set the four k phase params for this frame. */
-  setPhase(k: readonly [number, number, number, number]): void {
+  /** Set the k and l (scanline-interlaced) phase param sets for this frame. */
+  setPhase(
+    k: readonly [number, number, number, number],
+    l: readonly [number, number, number, number],
+  ): void {
     this.p1.value = k[0];
     this.p2.value = k[1];
     this.p3.value = k[2];
     this.p4.value = k[3];
+    this.pl1.value = l[0];
+    this.pl2.value = l[1];
+    this.pl3.value = l[2];
+    this.pl4.value = l[3];
   }
 
   /** Render the plasma into the (320×280) field target. */

@@ -11,7 +11,15 @@ import { LinearFilter, NearestFilter } from 'three';
 import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
 import { PLASMA_H, PLASMA_W, PlasmaField } from './nodes.js';
 import { buildPlasmaPalettes, crossFade } from './palette.js';
-import { INITTABLE_K, moveplz, type PhaseK, sectionsPassed, TIMETABLE } from './phase.js';
+import {
+  INITTABLE_K,
+  INITTABLE_L,
+  moveplz,
+  moveplzL,
+  type PhaseK,
+  sectionsPassed,
+  TIMETABLE,
+} from './phase.js';
 import { buildPtau } from './tables.js';
 
 /** authentic = chunky NearestFilter upscale; modern = smooth LinearFilter (default). */
@@ -25,6 +33,7 @@ const FADE_FRAMES = 64; // cop_drop cross-fade span
 // noUncheckedIndexedAccess makes array reads `T | undefined`; resolve to concrete values up front.
 // The codebase forbids non-null assertions (`!`), so guard/fallback instead.
 const INITK0: PhaseK = INITTABLE_K[0] ?? [3500, 2300, 3900, 3670];
+const INITL0: PhaseK = INITTABLE_L[0] ?? [1000, 2000, 3000, 4000];
 const SECTION_END = TIMETABLE[TIMETABLE.length - 1] ?? 0;
 
 export class Plasma implements Effect {
@@ -38,6 +47,7 @@ export class Plasma implements Effect {
   private blit: Blit | null = null;
 
   private k: PhaseK = INITK0;
+  private l: PhaseK = INITL0;
   private section = 0;
   private fromSection = 0;
   private fade = FADE_FRAMES; // frames into the current cross-fade (starts settled)
@@ -57,6 +67,7 @@ export class Plasma implements Effect {
     this.blit.setSource(this.fieldTarget.texture);
     this.applyFilter();
     this.k = INITK0;
+    this.l = INITL0;
     this.section = 0;
     this.fromSection = 0;
     this.fade = FADE_FRAMES;
@@ -86,6 +97,7 @@ export class Plasma implements Effect {
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       this.k = moveplz(this.k);
+      this.l = moveplzL(this.l);
       this.mframe += MFRAME_HZ * SIM_DT;
       if (this.mframe >= SECTION_END) {
         // Loop the whole choreography (the sequencer will gate one-shot entry/exit later).
@@ -94,6 +106,7 @@ export class Plasma implements Effect {
         this.fromSection = 0;
         this.fade = FADE_FRAMES;
         this.k = INITK0;
+        this.l = INITL0;
         this.settled = false;
       }
       const passed = Math.min(sectionsPassed(this.mframe), this.palettes.length - 1);
@@ -102,13 +115,14 @@ export class Plasma implements Effect {
         this.section = passed;
         this.fade = 0; // begin a fresh cross-fade
         this.k = INITTABLE_K[passed] ?? this.k;
+        this.l = INITTABLE_L[passed] ?? this.l;
         this.settled = false;
       }
       if (this.fade < FADE_FRAMES) this.fade++;
     }
     const from = this.palettes[this.fromSection];
     const to = this.palettes[this.section];
-    this.field?.setPhase(this.k);
+    this.field?.setPhase(this.k, this.l);
     if (from && to) {
       // While a cross-fade is in progress, rebuild the blended LUT each frame; once settled, upload
       // the target palette once and stop re-allocating/re-uploading it every frame.
