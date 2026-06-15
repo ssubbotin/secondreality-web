@@ -7,7 +7,7 @@ import {
   SRGBColorSpace,
   UnsignedByteType,
 } from 'three';
-import { float, floor, mod, texture as textureNode, uniform, uv, vec2 } from 'three/tsl';
+import { float, mod, texture as textureNode, uniform, uv, vec2 } from 'three/tsl';
 import {
   type RenderTarget as GpuRenderTarget,
   MeshBasicNodeMaterial,
@@ -19,6 +19,10 @@ import { buildLsini4, buildLsini16, buildPsini } from './tables.js';
 /** Field logical resolution — the original mode-X plasma grid (tunable). */
 export const PLASMA_W = 320;
 export const PLASMA_H = 280;
+
+/** Original plzline loop ranges (ASMYT.ASM IRP ccc = 0..83 → 84 cols; PLZ.C MAXY = 280 lines). */
+export const PLASMA_COLS = 84;
+export const PLASMA_LINES = 280;
 
 /** Wrap a single-channel float table into an Nx1 data texture (NearestFilter, raw values via .r). */
 function tableTexture(values: ArrayLike<number>): DataTexture {
@@ -32,9 +36,11 @@ function tableTexture(values: ArrayLike<number>): DataTexture {
 }
 
 /**
- * The plasma field + palette pass. idx(x,y) = psini[x·32 + lsini16[y·2+p2]·16 + p1] +
- * psini[y·4 + lsini4[x·64+p4]·4 + p3] (PLZ.C PLZSINI / ASMYT plzline), masked to each table's
- * size; idx (mod 256) indexes the 256-entry palette LUT, rebuilt each frame by the Effect.
+ * The plasma field + palette pass, reproducing ASMYT.ASM `plzline` over column `ccc` (0..83) and
+ * line `yy` (0..279). Per pixel: idx = psini[8·ccc + lsini16[yy−4·ccc+p2+320] + p1] +
+ * psini[2·yy − 4·ccc + lsini4[yy+16·ccc+p4] + p3 + 320], all masked to each table's size; idx (mod
+ * 256) indexes the 256-entry palette LUT, rebuilt each frame by the Effect. The diagonal lsini
+ * indices are what give the field its smooth diagonal flow.
  */
 export class PlasmaField {
   private readonly psini = tableTexture(buildPsini());
@@ -61,17 +67,41 @@ export class PlasmaField {
     const fetch = (tex: DataTexture, i: ReturnType<typeof float>, n: number) =>
       textureNode(tex, vec2(i.add(float(0.5)).div(n), 0.5)).r;
 
-    const x = floor(uv().x.mul(PLASMA_W)); // 0..319
-    const y = floor(uv().y.mul(PLASMA_H)); // 0..279
-
-    const l16 = fetch(this.lsini16, mod(y.mul(2).add(this.p2), 8192), 8192);
-    const l4 = fetch(this.lsini4, mod(x.mul(64).add(this.p4), 8192), 8192);
-    // lsini16/lsini4 are PRE-SCALED in their generators (×16 / ×8), so they are added in as direct
-    // psini offsets — the original rasterizer (ASMYT.ASM plzline) loads the word value and adds it
-    // straight in. The PLZSINI macro's extra ×16/×4 scaled an UNSCALED byte table; re-applying it to
-    // the pre-scaled tables would double-scale and 8–16× the cross-modulation frequency.
-    const a1 = mod(x.mul(32).add(l16).add(this.p1), 16384);
-    const a2 = mod(y.mul(4).add(l4).add(this.p3), 16384);
+    // Mirror the original rasterizer (ASMYT.ASM plzline) loop variables: ccc = column, yy = line.
+    // The PLZSINI macro in PLZ.C is stale reference code; the shipped self-modifying addressing uses
+    // small column strides and DIAGONAL lsini indices — that is what makes the field flow diagonally
+    // and stay smooth (the macro's x·32 was ~16× too fast and produced vertical streaks).
+    // Continuous (un-floored) so modern mode is smooth; authentic chunkiness comes from the
+    // NearestFilter upscale of the 320×280 field target, not from quantising the field here.
+    const ccc = uv().x.mul(PLASMA_COLS);
+    const yy = uv().y.mul(PLASMA_LINES);
+    // Exact setplzparas (ASMYT.ASM) index arithmetic. lsini16/lsini4 are PRE-SCALED (×16/×8) in their
+    // generators, so they add straight into the psini index. The +320 constants are setplzparas's
+    // OFFSET +80*8 (lsini16, word) / +80*4 (psini, byte). (+ a multiple of the size keeps mod ≥ 0.)
+    //   l16 = lsini16[yy − 4·ccc + p2 + 320] ;  l4 = lsini4[yy + 16·ccc + p4]
+    //   a1  = 8·ccc + l16 + p1             ;  a2 = 2·yy − 4·ccc + l4 + p3 + 320
+    const l16 = fetch(
+      this.lsini16,
+      mod(
+        yy
+          .sub(ccc.mul(4))
+          .add(this.p2)
+          .add(320 + 8192),
+        8192,
+      ),
+      8192,
+    );
+    const l4 = fetch(this.lsini4, mod(yy.add(ccc.mul(16)).add(this.p4), 8192), 8192);
+    const a1 = mod(ccc.mul(8).add(l16).add(this.p1), 16384);
+    const a2 = mod(
+      yy
+        .mul(2)
+        .sub(ccc.mul(4))
+        .add(l4)
+        .add(this.p3)
+        .add(320 + 16384),
+      16384,
+    );
     const idx = mod(fetch(this.psini, a1, 16384).add(fetch(this.psini, a2, 16384)), 256);
 
     this.material.colorNode = textureNode(this.lut, vec2(idx.add(float(0.5)).div(256), 0.5));
