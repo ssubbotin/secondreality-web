@@ -1,5 +1,5 @@
-import { AudioEngine, type Backend, createRenderer, MusicSync } from '@sr/engine';
-import { TechnoBars } from '@sr/parts';
+import { AudioEngine, type Backend, createRenderer, type Effect, MusicSync } from '@sr/engine';
+import { Plasma, TechnoBars } from '@sr/parts';
 import { runEffect } from './run-effect.js';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -16,10 +16,13 @@ const handle = createRenderer({
   },
 });
 
-// MUSIC1 (techno module) is the natural pairing for the TECHNO part.
+// Pick the effect via ?effect=plasma|techno (default techno). Each part pairs with its module:
+// MUSIC1 is the techno module; plasma pairs with MUSIC0 (confirm by ear — see plan open item).
+const which = new URLSearchParams(location.search).get('effect') ?? 'techno';
+const usePlasma = which === 'plasma';
 const audio = new AudioEngine({
   workletUrl: '/worklets/player-worklet.js',
-  moduleUrl: '/music/MUSIC1.S3M',
+  moduleUrl: usePlasma ? '/music/MUSIC0.S3M' : '/music/MUSIC1.S3M',
 });
 const music = new MusicSync();
 
@@ -43,7 +46,9 @@ try {
   throw err;
 }
 
-const effect = new TechnoBars();
+const effect: Effect & { setMode(m: 'authentic' | 'modern'): void } = usePlasma
+  ? new Plasma()
+  : new TechnoBars();
 authBox.addEventListener(
   'change',
   () => {
