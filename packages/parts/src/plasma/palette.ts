@@ -11,7 +11,11 @@ export const PALETTE_COUNT = 5;
  */
 export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
   const t = (i: number): number => ptau[i] ?? 0;
-  const pals = Array.from({ length: PALETTE_COUNT }, () => new Uint8Array(256 * 3));
+  const p0 = new Uint8Array(256 * 3);
+  const p1 = new Uint8Array(256 * 3);
+  const p2 = new Uint8Array(256 * 3);
+  const p3 = new Uint8Array(256 * 3);
+  const p4 = new Uint8Array(256 * 3);
 
   // Each band loop appends RGB triples starting at colour index 1 (offset 3).
   const writer = (pal: Uint8Array) => {
@@ -25,7 +29,7 @@ export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
 
   // pals[0] — RGB
   {
-    const w = writer(pals[0]!);
+    const w = writer(p0);
     for (let a = 1; a < 64; a++) w(t(a), t(0), t(0));
     for (let a = 0; a < 64; a++) w(t(63 - a), t(0), t(0));
     for (let a = 0; a < 64; a++) w(t(0), t(0), t(a));
@@ -33,7 +37,7 @@ export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
   }
   // pals[1] — red/black
   {
-    const w = writer(pals[1]!);
+    const w = writer(p1);
     for (let a = 1; a < 64; a++) w(t(a), t(0), t(0));
     for (let a = 0; a < 64; a++) w(t(63 - a), t(0), t(a));
     for (let a = 0; a < 64; a++) w(t(0), t(a), t(63 - a));
@@ -41,7 +45,7 @@ export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
   }
   // pals[2] — white (half-bright)
   {
-    const w = writer(pals[2]!);
+    const w = writer(p2);
     for (let a = 1; a < 64; a++) w(trunc(t(0) / 2), trunc(t(0) / 2), trunc(t(0) / 2));
     for (let a = 0; a < 64; a++) w(trunc(t(a) / 2), trunc(t(a) / 2), trunc(t(a) / 2));
     for (let a = 0; a < 64; a++)
@@ -50,7 +54,7 @@ export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
   }
   // pals[3] — red/white
   {
-    const w = writer(pals[3]!);
+    const w = writer(p3);
     for (let a = 1; a < 64; a++) w(t(a), t(0), t(0));
     for (let a = 0; a < 64; a++) w(t(63), t(a), t(a));
     for (let a = 0; a < 64; a++) w(t(63 - a), t(63 - a), t(63));
@@ -58,7 +62,7 @@ export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
   }
   // pals[4] — white II
   {
-    const w = writer(pals[4]!);
+    const w = writer(p4);
     for (let a = 1; a < 75; a++)
       w(t(63 - trunc((a * 64) / 75)), t(63 - trunc((a * 64) / 75)), t(63 - trunc((a * 64) / 75)));
     for (let a = 0; a < 106; a++) w(0, 0, 0);
@@ -67,7 +71,7 @@ export function buildPlasmaPalettes(ptau: Uint8Array): Uint8Array[] {
       w(trunc((v * 8) / 10), trunc((v * 9) / 10), v);
     }
   }
-  return pals;
+  return [p0, p1, p2, p3, p4];
 }
 
 /** Per-channel linear lerp between two 256×RGB palettes; t in 0..1. Returns a fresh 256×RGB array. */

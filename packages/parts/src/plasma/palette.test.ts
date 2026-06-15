@@ -11,24 +11,28 @@ describe('plasma palettes', () => {
     for (const p of pals) {
       expect(p).toHaveLength(256 * 3);
       expect([p[0], p[1], p[2]]).toEqual([0, 0, 0]); // colour 0 = black
-      for (const v of p) expect(v).toBeGreaterThanOrEqual(0), expect(v).toBeLessThanOrEqual(63);
+      for (const v of p) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(63);
+      }
     }
   });
 
   it('palette 0 (RGB) ramps red on the first band', () => {
     const ptau = buildPtau();
+    const pal0 = pals[0] ?? new Uint8Array();
     // init_plz pals[0]: colour 1 = (ptau[1], ptau[0], ptau[0]) = (ptau[1], 0, 0)
-    expect(pals[0]![1 * 3]).toBe(ptau[1]);
-    expect(pals[0]![1 * 3 + 1]).toBe(0);
-    expect(pals[0]![1 * 3 + 2]).toBe(0);
+    expect(pal0[1 * 3]).toBe(ptau[1]);
+    expect(pal0[1 * 3 + 1]).toBe(0);
+    expect(pal0[1 * 3 + 2]).toBe(0);
   });
 
   it('crossFade endpoints return the source and target verbatim', () => {
-    const a = pals[0]!;
-    const b = pals[1]!;
+    const a = pals[0] ?? new Uint8Array();
+    const b = pals[1] ?? new Uint8Array();
     expect(Array.from(crossFade(a, b, 0))).toEqual(Array.from(a));
     expect(Array.from(crossFade(a, b, 1))).toEqual(Array.from(b));
     const mid = crossFade(a, b, 0.5);
-    expect(mid[300]).toBe(Math.round((a[300]! + b[300]!) / 2));
+    expect(mid[300]).toBe(Math.round(((a[300] ?? 0) + (b[300] ?? 0)) / 2));
   });
 });
