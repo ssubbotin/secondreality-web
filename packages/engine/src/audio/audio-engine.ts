@@ -63,9 +63,11 @@ export class AudioEngine {
     });
 
     node.connect(ctx.destination);
-    await ctx.resume();
-    // Wait until libopenmpt has initialised in the worklet, so a loadModule/seek right after start()
-    // can't no-op against a not-yet-ready player. (The MessagePort queues `ready` until onmessage is set.)
+    // Do NOT resume() here: setup() must complete WITHOUT a user gesture, because the best-effort
+    // autostart calls start() on load. resume() is gesture-dependent and lives in start(); calling it
+    // in this memoized setup poisons the promise when there's no gesture (Firefox hangs/rejects a
+    // no-gesture resume), which then blocks every later gesture-driven start() — switching + music
+    // die. The worklet initialises (and posts `ready`) regardless of the context being suspended.
     await ready;
 
     // Re-anchor hard when returning from a backgrounded tab.
