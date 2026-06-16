@@ -1,5 +1,6 @@
 import { AudioEngine, type Backend, createRenderer, type Effect, MusicSync } from '@sr/engine';
 import { Plasma, Rotozoomer, TechnoBars } from '@sr/parts';
+import { renderPartsMenu } from './parts-menu.js';
 import { runEffect } from './run-effect.js';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -56,10 +57,12 @@ authBox.addEventListener(
 );
 
 const teardown = await runEffect(effect, { handle, canvas, audio, music });
+const partsMenu = renderPartsMenu(which);
 
 // Tear down the previous instance before Vite swaps the module, so reloads don't accumulate
 // orphaned RAF loops, render targets, or duplicate listeners.
 import.meta.hot?.dispose(() => {
   ui.abort();
   teardown();
+  partsMenu.remove();
 });
