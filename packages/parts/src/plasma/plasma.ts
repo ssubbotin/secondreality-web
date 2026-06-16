@@ -10,7 +10,7 @@ import {
 import { LinearFilter, NearestFilter } from 'three';
 import { RenderTarget as GpuRenderTarget } from 'three/webgpu';
 import { PLASMA_H, PLASMA_W, PlasmaField } from './nodes.js';
-import { buildPlasmaPalettes, crossFade } from './palette.js';
+import { buildPlasmaPalettes } from './palette.js';
 import {
   INITTABLE_K,
   INITTABLE_L,
@@ -53,7 +53,6 @@ export class Plasma implements Effect {
   private fade = FADE_FRAMES; // frames into the current cross-fade (starts settled)
   private mframe = 0; // elapsed mframes since (re)start
   private acc = 0;
-  private settled = false; // true once the settled palette has been uploaded (skips per-frame churn)
 
   async load(_ctx: LoadContext): Promise<void> {
     // No external assets — tables are code.
@@ -73,7 +72,9 @@ export class Plasma implements Effect {
     this.fade = FADE_FRAMES;
     this.mframe = 0;
     this.acc = 0;
-    this.settled = false;
+    const p0 = this.palettes[0];
+    if (p0) this.field.setPalettes(p0, p0);
+    this.field.setFade(1);
   }
 
   /** dis_setmode equivalent — switch the authentic↔modern upscale filter (default modern). */
@@ -94,6 +95,7 @@ export class Plasma implements Effect {
 
   update(frame: FrameContext): void {
     this.acc += frame.dt;
+    let sectionChanged = false;
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       this.k = moveplz(this.k);
@@ -107,7 +109,7 @@ export class Plasma implements Effect {
         this.fade = FADE_FRAMES;
         this.k = INITK0;
         this.l = INITL0;
-        this.settled = false;
+        sectionChanged = true;
       }
       const passed = Math.min(sectionsPassed(this.mframe), this.palettes.length - 1);
       if (passed !== this.section) {
@@ -116,23 +118,20 @@ export class Plasma implements Effect {
         this.fade = 0; // begin a fresh cross-fade
         this.k = INITTABLE_K[passed] ?? this.k;
         this.l = INITTABLE_L[passed] ?? this.l;
-        this.settled = false;
+        sectionChanged = true;
       }
       if (this.fade < FADE_FRAMES) this.fade++;
     }
-    const from = this.palettes[this.fromSection];
-    const to = this.palettes[this.section];
     this.field?.setPhase(this.k, this.l);
-    if (from && to) {
-      // While a cross-fade is in progress, rebuild the blended LUT each frame; once settled, upload
-      // the target palette once and stop re-allocating/re-uploading it every frame.
-      if (this.fade < FADE_FRAMES) {
-        this.field?.setPalette(crossFade(from, to, this.fade / FADE_FRAMES));
-      } else if (!this.settled) {
-        this.field?.setPalette(to);
-        this.settled = true;
-      }
+    // Swap the LUT pair only when the section changed (rare); the per-frame motion is the fade uniform.
+    // The palette textures stay stable between sections — WebGL2 doesn't reliably re-upload a texture
+    // every frame, which is why the cross-fade is a shader mix rather than a CPU palette rebuild.
+    if (sectionChanged) {
+      const from = this.palettes[this.fromSection];
+      const to = this.palettes[this.section];
+      if (from && to) this.field?.setPalettes(from, to);
     }
+    this.field?.setFade(Math.min(this.fade / FADE_FRAMES, 1));
   }
 
   render(_frame: FrameContext, target: RenderTarget): void {

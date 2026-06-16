@@ -17,12 +17,22 @@ export interface RunEffectDeps {
   music: MusicSync;
 }
 
+/** A persistent lab host: owns the renderer loop + render target, swaps the mounted Effect. */
+export interface EffectHost {
+  /** Load + init `effect`, then atomically swap it in and dispose the previous one. */
+  setEffect(effect: Effect): Promise<void>;
+  /** The currently mounted effect (null before the first `setEffect`). */
+  current(): Effect | null;
+  /** Stop the loop and release all persistent + current GPU resources. */
+  dispose(): void;
+}
+
 /**
- * Mount a single Effect, drive its lifecycle, and blit its target to the canvas. Returns a teardown
- * closure that stops the loop and releases GPU resources — call it on HMR / unmount so reloads don't
- * accumulate orphaned RAF loops and render targets.
+ * Build the host once. The renderer, render target, blit and RAF loop persist across effect swaps;
+ * only the Effect instance changes. The loop renders whatever `current` is, advancing from the music
+ * clock (hybrid: wall-time until audio plays, then song-seconds). Returns the host.
  */
-export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<() => void> {
+export function createEffectHost(deps: RunEffectDeps): EffectHost {
   const { handle, canvas, audio, music } = deps;
   const { renderer, backend } = handle;
 
@@ -35,38 +45,32 @@ export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<()
 
   const viewport = size();
   const ctx: DemoContext = { backend, renderer, viewport };
-
-  await effect.load({ backend });
-  effect.init(ctx);
-
-  // The target the effect renders into; blit presents it to the canvas.
   const gpu = new GpuRenderTarget(viewport.width, viewport.height);
   const blit = new Blit();
+  blit.setSource(gpu.texture);
+
+  let current: Effect | null = null;
+  let token = 0;
 
   const onResize = () => {
     const s = size();
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     gpu.setSize(s.width, s.height);
-    effect.resize(s.width, s.height);
+    current?.resize(s.width, s.height);
   };
   window.addEventListener('resize', onResize);
-  onResize();
-
-  // The blit source is the effect's render target. three reuses the same Texture object across
-  // RenderTarget.setSize, so bind it once here rather than rebuilding the TSL node every frame.
-  blit.setSource(gpu.texture);
+  onResize(); // size the renderer now (current is null → its resize is skipped)
 
   let frameNumber = 0;
   let lastSong = 0;
   const loop = startLoop((rafDt) => {
     const clock = music.resolve(audio.sample());
-    // Hybrid clock: until the track is actually playing, advance on wall-time so the demo animates
-    // immediately (no frozen-until-click). Once audio runs, slave the sim to the music — advance by
-    // elapsed SONG-seconds (pause → freeze; loop-wrap → one clamped frame) so it stays locked to the
-    // track. rAF always paces rendering.
+    // Hybrid clock: wall-time until the track plays, then advance by elapsed SONG-seconds (pause →
+    // freeze; loop-wrap / seek → one clamped frame). rAF always paces rendering.
     const songDt = Math.min(0.1, Math.max(0, clock.songSeconds - lastSong));
     lastSong = clock.songSeconds;
     const dt = audio.isRunning ? songDt : rafDt;
+    if (!current) return;
     const frame: FrameContext = {
       clock,
       dt,
@@ -74,18 +78,39 @@ export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<()
       cueTime: 0,
       cueProgress: 0,
     };
-    effect.update(frame);
-    effect.render(frame, { width: gpu.width, height: gpu.height, gpu });
-
+    current.update(frame);
+    current.render(frame, { width: gpu.width, height: gpu.height, gpu });
     renderer.setRenderTarget(null);
     blit.render(renderer);
   });
 
-  return () => {
-    loop.stop();
-    window.removeEventListener('resize', onResize);
-    effect.dispose();
-    blit.dispose();
-    gpu.dispose();
+  return {
+    async setEffect(effect: Effect): Promise<void> {
+      const mine = ++token; // stale-load guard: a newer setEffect supersedes this one
+      await effect.load({ backend });
+      if (mine !== token) {
+        effect.dispose();
+        return;
+      }
+      effect.init(ctx);
+      const s = size();
+      effect.resize(s.width, s.height);
+      if (mine !== token) {
+        effect.dispose();
+        return;
+      }
+      const prev = current;
+      current = effect;
+      prev?.dispose();
+    },
+    current: () => current,
+    dispose: () => {
+      token++; // invalidate any in-flight setEffect
+      loop.stop();
+      window.removeEventListener('resize', onResize);
+      current?.dispose();
+      blit.dispose();
+      gpu.dispose();
+    },
   };
 }

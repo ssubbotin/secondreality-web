@@ -14,20 +14,26 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
   private _zplusTable: Int8Array | null = null;
-  private started = false;
+  private _currentModuleUrl: string | null = null;
+  private setupPromise: Promise<void> | null = null;
 
   constructor(private readonly opts: AudioEngineOptions) {}
 
-  /** Must be called from a user-gesture handler (autoplay policy). Idempotent. */
+  /**
+   * Must be called from a user-gesture handler (autoplay policy). Idempotent: the heavy setup runs
+   * once and is memoized, so concurrent callers (e.g. a part switch during init) await the same
+   * promise and never observe a half-built node. Re-anchors the context on every call.
+   */
   async start(): Promise<void> {
-    if (this.started) {
-      await this.ctx?.resume();
-      return;
-    }
-    this.started = true;
+    this.setupPromise ??= this.setup();
+    await this.setupPromise;
+    await this.ctx?.resume();
+  }
 
+  private async setup(): Promise<void> {
     const ctx = new AudioContext({ latencyHint: 'interactive' });
     this.ctx = ctx;
+    this._currentModuleUrl = this.opts.moduleUrl;
     await ctx.audioWorklet.addModule(this.opts.workletUrl);
 
     // libopenmpt's wasm is embedded in the worklet bundle; we only fetch the module.
@@ -46,15 +52,23 @@ export class AudioEngine {
     });
     this.node = node;
 
-    node.port.onmessage = (e: MessageEvent) => {
-      const m = e.data as { type: string } & Partial<PositionReport>;
-      if (m.type === 'pos') {
-        this.clock.update(m as PositionReport);
-      }
-    };
+    // One handler for position reports + the worklet's one-shot `ready`. Set inside the Promise
+    // executor (runs synchronously) so `resolve` is captured without a non-null assertion.
+    const ready = new Promise<void>((resolve) => {
+      node.port.onmessage = (e: MessageEvent) => {
+        const m = e.data as { type: string } & Partial<PositionReport>;
+        if (m.type === 'pos') this.clock.update(m as PositionReport);
+        else if (m.type === 'ready') resolve();
+      };
+    });
 
     node.connect(ctx.destination);
-    await ctx.resume();
+    // Do NOT resume() here: setup() must complete WITHOUT a user gesture, because the best-effort
+    // autostart calls start() on load. resume() is gesture-dependent and lives in start(); calling it
+    // in this memoized setup poisons the promise when there's no gesture (Firefox hangs/rejects a
+    // no-gesture resume), which then blocks every later gesture-driven start() — switching + music
+    // die. The worklet initialises (and posts `ready`) regardless of the context being suspended.
+    await ready;
 
     // Re-anchor hard when returning from a backgrounded tab.
     document.addEventListener('visibilitychange', () => {
@@ -76,6 +90,25 @@ export class AudioEngine {
   /** Jump the track to `seconds` (the clock re-anchors on the next worklet position report). */
   seek(seconds: number): void {
     this.node?.port.postMessage({ type: 'seek', seconds });
+  }
+
+  /** Where in the track playback currently is, by module URL (null until started). */
+  get currentModuleUrl(): string | null {
+    return this._currentModuleUrl;
+  }
+
+  /**
+   * Swap the playing module without tearing down the AudioContext (so no new user gesture is
+   * needed). Fetches + de-obfuscates the new module, recomputes the zplus table, and hands the bytes
+   * to the live worklet. No-op until {@link start} has created the worklet node.
+   */
+  async loadModule(moduleUrl: string, startSeconds: number): Promise<void> {
+    if (!this.node) return;
+    const raw = await fetch(moduleUrl).then((r) => r.arrayBuffer());
+    const deob = deobfuscateS3M(raw);
+    this._zplusTable = computeZplusTable(deob);
+    this._currentModuleUrl = moduleUrl;
+    this.node.port.postMessage({ type: 'loadModule', moduleData: deob.buffer, startSeconds });
   }
 
   /** Per-order np_zplus from the loaded module's +++ markers; null until start() decodes the module. */
