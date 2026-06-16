@@ -75,17 +75,24 @@ let partsMenu: PartsMenu;
 // Switch effects in-app: keep the AudioContext alive, swap the module only when it changes, seek to
 // the part's position, swap the effect, and update the URL + menu highlight. The click is the gesture
 // that starts audio the first time.
+// Serialises rapid switches: a superseded switchTo bails after its awaits so a stale loadModule
+// can't clobber the module/zplus table or the URL/highlight. (host.setEffect has its own token for
+// the effect itself.)
+let switchToken = 0;
 const switchTo = async (id: string, push = true): Promise<void> => {
   const def = EFFECTS[id];
   if (!def) return;
+  const mine = ++switchToken;
   await audio.start(); // idempotent; resolves only once the worklet node is ready
   if (audio.currentModuleUrl !== def.moduleUrl) {
     await audio.loadModule(def.moduleUrl, def.seek);
+    if (mine !== switchToken) return; // a newer switch superseded this one
     music.setZplusTable(audio.zplusTable);
   } else {
     audio.seek(def.seek);
   }
   await host.setEffect(def.create());
+  if (mine !== switchToken) return; // stale: host.setEffect already disposed our effect
   currentId = id;
   if (push) history.pushState({ id }, '', `?effect=${id}`); // popstate already moved the URL
   partsMenu.setActive(id);
