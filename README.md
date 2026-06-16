@@ -11,10 +11,10 @@ AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 **▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
 (single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
 
-> **Status: foundation complete, 2 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
+> **Status: foundation complete, 3 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
 > master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place and the
-> first two effects (Techno bars, Plasma) are faithful and merged. The remaining 18 parts are being ported
-> one at a time.
+> first three effects (Techno bars, Plasma, Rotozoomer) are faithful and merged. The remaining 17 parts are
+> being ported one at a time.
 
 ## Quick start
 
@@ -47,7 +47,7 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 9 | Mirror-ball water scroll | `WATER` | 2D scroller + raytraced background + per-scanline ripple | ⬜ |
 | 10 | Desert Dream stars | `DDSTARS` | Particle star field | ⬜ |
 | 11 | Lens | `LENS` | Per-pixel displacement (baked displacement texture) | ⬜ |
-| 12 | Rotozoomer | `LENS` | Affine UV warp + self-feedback | ⬜ |
+| 12 | **Rotozoomer** | `LENS` | Affine warp (rotation + zoom) of a tiling picture | ✅ |
 | 13 | **Plasma** | `PLZPART` | Fullscreen raster — diagonal summed sine-table field + k/l interlace + animated palette | ✅ |
 | 14 | Plasmacube | `PLZPART` | Fullscreen raster plasma on a cube | ⬜ |
 | 15 | MiniVectorBalls | `DOTS` | Particle / instanced dot balls | ⬜ |
@@ -57,7 +57,7 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 19 | End picture flash | `ENDPIC` | Picture flash | ⬜ |
 | 20 | Credits / greetings scroll | `CREDITS` / `ENDSCRL` | 2D scroller | ⬜ |
 
-**2 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
+**3 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
 3D vector, particle/dot systems, 2D scrollers) are detailed in the design spec under
 `docs/superpowers/specs/`.
 
