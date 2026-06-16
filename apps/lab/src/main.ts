@@ -1,7 +1,7 @@
-import { AudioEngine, type Backend, createRenderer, type Effect, MusicSync } from '@sr/engine';
-import { Plasma, Rotozoomer, TechnoBars } from '@sr/parts';
+import { AudioEngine, type Backend, createRenderer, MusicSync } from '@sr/engine';
+import { EFFECTS, type ModeEffect, resolveEffect } from './effects.js';
 import { renderPartsMenu } from './parts-menu.js';
-import { runEffect } from './run-effect.js';
+import { createEffectHost } from './run-effect.js';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const hud = document.getElementById('hud') as HTMLDivElement;
@@ -17,20 +17,22 @@ const handle = createRenderer({
   },
 });
 
-// Pick the effect via ?effect=plasma|rotozoomer|techno (default techno). MUSIC1 is the techno
-// module; the other parts pair with MUSIC0 (confirm by ear — see plan open items).
+// Pick the effect via ?effect=plasma|rotozoomer|techno (default techno); see effects.ts for the
+// module + seek per part. ?seek= overrides the *initial* position for debugging.
 const params = new URLSearchParams(location.search);
-const which = params.get('effect') ?? 'techno';
-
-// Each part starts the track at its own position. PLACEHOLDERS — the original syncs parts to the
-// song's +++ order markers, not a seek table, so these need deriving/tuning. Override live with ?seek=.
-const SEEK_SECONDS: Record<string, number> = { techno: 0, plasma: 0, rotozoomer: 0 };
+const currentId = resolveEffect(params.get('effect'));
+// resolveEffect guarantees currentId is a valid key in EFFECTS.
+const currentDef =
+  EFFECTS[currentId] ??
+  (() => {
+    throw new Error(`unknown effect: ${currentId}`);
+  })();
 const seekParam = params.get('seek');
-const startSeconds = seekParam !== null ? Number(seekParam) : (SEEK_SECONDS[which] ?? 0);
+const startSeconds = seekParam !== null ? Number(seekParam) : currentDef.seek;
 
 const audio = new AudioEngine({
   workletUrl: '/worklets/player-worklet.js',
-  moduleUrl: which === 'techno' ? '/music/MUSIC1.S3M' : '/music/MUSIC0.S3M',
+  moduleUrl: currentDef.moduleUrl,
   startSeconds,
 });
 const music = new MusicSync();
@@ -65,11 +67,10 @@ try {
   throw err;
 }
 
-const effect: Effect & { setMode(m: 'authentic' | 'modern'): void } =
-  which === 'plasma' ? new Plasma() : which === 'rotozoomer' ? new Rotozoomer() : new TechnoBars();
+const host = createEffectHost({ handle, canvas, audio, music });
 
 // The part selector is always on — it's the dev navigation between effects.
-const partsMenu = renderPartsMenu(which);
+const partsMenu = renderPartsMenu(currentId);
 
 // The rest of the dev controls (play button, authentic toggle) are revealed only with ?debug=true.
 if (debug) {
@@ -77,17 +78,20 @@ if (debug) {
   document.getElementById('ui')?.style.setProperty('display', 'block');
   authBox.addEventListener(
     'change',
-    () => effect.setMode(authBox.checked ? 'authentic' : 'modern'),
+    () => {
+      const cur = host.current() as ModeEffect | null;
+      cur?.setMode(authBox.checked ? 'authentic' : 'modern');
+    },
     { signal: ui.signal },
   );
 }
 
-const teardown = await runEffect(effect, { handle, canvas, audio, music });
+await host.setEffect(currentDef.create());
 
-// Tear down the previous instance before Vite swaps the module, so reloads don't accumulate
-// orphaned RAF loops, render targets, or duplicate listeners.
+// Tear down before Vite swaps the module, so reloads don't accumulate orphaned RAF loops,
+// render targets, or duplicate listeners.
 import.meta.hot?.dispose(() => {
   ui.abort();
-  teardown();
+  host.dispose();
   partsMenu.remove();
 });
