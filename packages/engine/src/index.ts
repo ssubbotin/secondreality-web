@@ -8,5 +8,6 @@ export * from './render/renderer.js';
 export * from './render/select-backend.js';
 export * from './sync/mframe.js';
 export * from './sync/music-sync.js';
+export * from './sync/order-markers.js';
 export * from './sync/reconstruct.js';
 export * from './types.js';
