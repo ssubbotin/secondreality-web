@@ -124,6 +124,11 @@ if (debug) {
 
 await host.setEffect(currentDef.create());
 
+// Best-effort autostart: try audio on load. Browsers keep the AudioContext suspended until a user
+// gesture, so this only *sounds* immediately where the browser permits (high media-engagement, dev);
+// otherwise it preloads the worklet/module and the first click (canvas or a part) starts playback.
+void startAudio();
+
 // Tear down before Vite swaps the module, so reloads don't accumulate orphaned RAF loops,
 // render targets, or duplicate listeners.
 import.meta.hot?.dispose(() => {
