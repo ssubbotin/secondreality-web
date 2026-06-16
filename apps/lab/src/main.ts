@@ -1,6 +1,6 @@
 import { AudioEngine, type Backend, createRenderer, MusicSync } from '@sr/engine';
 import { EFFECTS, type ModeEffect, resolveEffect } from './effects.js';
-import { renderPartsMenu } from './parts-menu.js';
+import { type PartsMenu, renderPartsMenu } from './parts-menu.js';
 import { createEffectHost } from './run-effect.js';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -20,7 +20,7 @@ const handle = createRenderer({
 // Pick the effect via ?effect=plasma|rotozoomer|techno (default techno); see effects.ts for the
 // module + seek per part. ?seek= overrides the *initial* position for debugging.
 const params = new URLSearchParams(location.search);
-const currentId = resolveEffect(params.get('effect'));
+let currentId = resolveEffect(params.get('effect'));
 // resolveEffect guarantees currentId is a valid key in EFFECTS.
 const currentDef =
   EFFECTS[currentId] ??
@@ -69,8 +69,37 @@ try {
 
 const host = createEffectHost({ handle, canvas, audio, music });
 
+// Declared up front so switchTo can reference it; assigned just below, before any click can fire.
+let partsMenu: PartsMenu;
+
+// Switch effects in-app: keep the AudioContext alive, swap the module only when it changes, seek to
+// the part's position, swap the effect, and update the URL + menu highlight. The click is the gesture
+// that starts audio the first time.
+const switchTo = async (id: string, push = true): Promise<void> => {
+  const def = EFFECTS[id];
+  if (!def) return;
+  await audio.start(); // idempotent; resolves only once the worklet node is ready
+  if (audio.currentModuleUrl !== def.moduleUrl) {
+    await audio.loadModule(def.moduleUrl, def.seek);
+    music.setZplusTable(audio.zplusTable);
+  } else {
+    audio.seek(def.seek);
+  }
+  await host.setEffect(def.create());
+  currentId = id;
+  if (push) history.pushState({ id }, '', `?effect=${id}`); // popstate already moved the URL
+  partsMenu.setActive(id);
+};
+
 // The part selector is always on — it's the dev navigation between effects.
-const partsMenu = renderPartsMenu(currentId);
+partsMenu = renderPartsMenu(currentId, (id) => void switchTo(id));
+
+// Back/forward re-runs the switch from the URL — without pushing a new entry.
+window.addEventListener(
+  'popstate',
+  () => void switchTo(resolveEffect(new URLSearchParams(location.search).get('effect')), false),
+  { signal: ui.signal },
+);
 
 // The rest of the dev controls (play button, authentic toggle) are revealed only with ?debug=true.
 if (debug) {

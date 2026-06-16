@@ -35,8 +35,18 @@ const PARTS: readonly Part[] = [
   { n: 20, name: 'Credits / greetings', effect: null },
 ];
 
-/** Build the selector panel for the current `?effect=` value and append it; returns it for teardown. */
-export function renderPartsMenu(current: string): HTMLDivElement {
+export interface PartsMenu {
+  /** Move the active highlight to `id` (no rebuild). */
+  setActive(id: string): void;
+  /** Remove the panel (HMR teardown). */
+  remove(): void;
+}
+
+/**
+ * Build the selector panel and append it. Implemented parts are clickable: a click calls `onSelect`
+ * (no navigation/reload). Returns a handle to move the highlight and tear the panel down.
+ */
+export function renderPartsMenu(current: string, onSelect: (id: string) => void): PartsMenu {
   document.getElementById('parts')?.remove(); // avoid duplicates on HMR re-run
   const panel = document.createElement('div');
   panel.id = 'parts';
@@ -52,17 +62,24 @@ export function renderPartsMenu(current: string): HTMLDivElement {
     userSelect: 'none',
   });
 
+  // id -> its row element, so setActive can restyle without rebuilding.
+  const rows = new Map<string, HTMLElement>();
+
   for (const p of PARTS) {
     const label = `${String(p.n).padStart(2, '0')} ${p.name}`;
     if (p.effect) {
+      const id = p.effect;
       const a = document.createElement('a');
-      a.href = `?effect=${p.effect}`;
+      a.href = `?effect=${id}`;
       a.textContent = label;
       a.style.display = 'block';
       a.style.textDecoration = 'none';
-      const active = p.effect === current;
-      a.style.color = active ? '#0f0' : '#39c';
-      a.style.fontWeight = active ? 'bold' : 'normal';
+      a.style.cursor = 'pointer';
+      a.addEventListener('click', (e) => {
+        e.preventDefault(); // in-app switch, no reload
+        onSelect(id);
+      });
+      rows.set(id, a);
       panel.appendChild(a);
     } else {
       const row = document.createElement('div');
@@ -72,6 +89,15 @@ export function renderPartsMenu(current: string): HTMLDivElement {
     }
   }
 
+  const setActive = (id: string) => {
+    for (const [rowId, el] of rows) {
+      const active = rowId === id;
+      el.style.color = active ? '#0f0' : '#39c';
+      el.style.fontWeight = active ? 'bold' : 'normal';
+    }
+  };
+  setActive(current);
+
   document.body.appendChild(panel);
-  return panel;
+  return { setActive, remove: () => panel.remove() };
 }
