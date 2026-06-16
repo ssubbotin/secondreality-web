@@ -49,6 +49,7 @@ const debug = new URLSearchParams(location.search).has('debug');
 let hint: HTMLElement | null = null;
 const startAudio = async (): Promise<void> => {
   await audio.start();
+  music.setZplusTable(audio.zplusTable); // module decoded — phase musplus by its +++ markers
   if (audio.isRunning) {
     playBtn.textContent = '⏸ playing';
     hint?.remove();

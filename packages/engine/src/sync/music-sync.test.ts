@@ -26,4 +26,12 @@ describe('MusicSync', () => {
     // +1s @ 125 BPM = +50 ticks.
     expect(sync.resolve({ ...base, songSeconds: 11 }).mframe).toBe(50);
   });
+
+  it('phases musplus by the live order using an injected zplus table', () => {
+    const sync = new MusicSync();
+    // order 1 -> zplus 0 (parked at -32), order 2 -> zplus 1 (+++ ahead -> row-64)
+    sync.setZplusTable(Int8Array.of(0, 0, 1));
+    expect(sync.resolve({ ...base, order: 1, row: 13 }).musplus).toBe(-32);
+    expect(sync.resolve({ ...base, order: 2, row: 45 }).musplus).toBe(-19); // 45 - 64
+  });
 });

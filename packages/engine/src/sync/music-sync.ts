@@ -8,6 +8,13 @@ export class MusicSync {
   private readonly mframe = new MframeTrack();
   /** Song-tick count from the most recent resolve(), so dis_setmframe can anchor to "now". */
   private lastTicks = 0;
+  /** Per-order np_zplus from the module's +++ markers; null until the audio engine supplies it. */
+  private zplusTable: Int8Array | null = null;
+
+  /** Inject the per-order zplus table (from the audio engine, once the module is decoded). */
+  setZplusTable(table: Int8Array | null): void {
+    this.zplusTable = table;
+  }
 
   /** dis_setmframe: reset/seed the music-frame counter to `value` at the current song position. */
   setMframe(value = 0): void {
@@ -16,7 +23,10 @@ export class MusicSync {
 
   /** Turn the base audio clock into the full MusicClock the demo reads. */
   resolve(base: ClockSample): MusicClock {
-    const { muscode, musplus, musrow } = reconstructSync(base.row);
+    // Phase musplus by the live order's zplus; before the table loads, fall back to reconstructSync's
+    // bracketed-section default (no behaviour change during the brief pre-load window).
+    const zplus = this.zplusTable ? (this.zplusTable[base.order] ?? 0) : undefined;
+    const { muscode, musplus, musrow } = reconstructSync(base.row, zplus);
     this.lastTicks = songTicksAt(base.songSeconds, base.bpm);
     return {
       muscode,
