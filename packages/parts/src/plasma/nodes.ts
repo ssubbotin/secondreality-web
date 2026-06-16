@@ -24,11 +24,19 @@ export const PLASMA_H = 280;
 export const PLASMA_COLS = 84;
 export const PLASMA_LINES = 280;
 
-/** Wrap a single-channel float table into an Nx1 data texture (NearestFilter, raw values via .r). */
+/**
+ * Width of the 2D lookup-table textures. The tables reach 16384 entries, which exceeds the max
+ * texture width on some WebGL2 implementations (Firefox → texStorage "unsupported size" → the plasma
+ * field renders blank). Storing them as TABLE_W-wide 2D textures keeps every dimension small.
+ */
+const TABLE_W = 256;
+
+/** Wrap a single-channel float table into a TABLE_W-wide 2D data texture (row-major, raw via .r). */
 function tableTexture(values: ArrayLike<number>): DataTexture {
-  const data = new Float32Array(values.length);
+  const height = Math.ceil(values.length / TABLE_W);
+  const data = new Float32Array(TABLE_W * height); // padded with 0
   for (let i = 0; i < values.length; i++) data[i] = values[i] ?? 0;
-  const tex = new DataTexture(data, values.length, 1, RedFormat, FloatType);
+  const tex = new DataTexture(data, TABLE_W, height, RedFormat, FloatType);
   tex.minFilter = NearestFilter;
   tex.magFilter = NearestFilter;
   tex.needsUpdate = true;
@@ -91,9 +99,15 @@ export class PlasmaField {
   private readonly quad: QuadMesh;
 
   constructor() {
-    // Fetch table[i]: NearestFilter sample at ((i+0.5)/N, 0.5) → table[floor(i)].
-    const fetch = (tex: DataTexture, i: ReturnType<typeof float>, n: number) =>
-      textureNode(tex, vec2(i.add(float(0.5)).div(n), 0.5)).r;
+    // Fetch table[i] from its TABLE_W-wide 2D layout (row-major): round i to the nearest entry (as the
+    // old 1×N NearestFilter did), then x = i mod TABLE_W, y = i / TABLE_W → exact texel (x,y) = table[i].
+    const fetch = (tex: DataTexture, i: ReturnType<typeof float>, n: number) => {
+      const h = Math.ceil(n / TABLE_W);
+      const ii = floor(i.add(float(0.5)));
+      const x = mod(ii, TABLE_W);
+      const y = floor(ii.div(TABLE_W));
+      return textureNode(tex, vec2(x.add(float(0.5)).div(TABLE_W), y.add(float(0.5)).div(h))).r;
+    };
 
     // Mirror the original rasterizer (ASMYT.ASM plzline) loop variables: ccc = column, yy = line.
     // The PLZSINI macro in PLZ.C is stale reference code; the shipped self-modifying addressing uses
