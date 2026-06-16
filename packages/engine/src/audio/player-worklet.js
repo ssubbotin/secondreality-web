@@ -7,12 +7,18 @@ const REPORT_EVERY = 4; // post position ~every 4 quanta (~11.6ms @ 44.1k)
 class SRPlayer extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { moduleData } = options.processorOptions;
+    const { moduleData, startSeconds } = options.processorOptions;
     this.ready = false;
     this.mod = 0;
     this.lib = null;
     this.bufPtr = 0;
     this.quantaSinceReport = 0;
+
+    // Runtime seek: `{ type: 'seek', seconds }` jumps the playback position (each part starts the
+    // track at its own offset; the host can also re-seek live).
+    this.port.onmessage = (e) => {
+      if (e.data && e.data.type === 'seek') this.seek(e.data.seconds);
+    };
 
     // libopenmpt's wasm is embedded in the prepended glue — no wasmBinary needed.
     // eslint-disable-next-line no-undef
@@ -24,10 +30,18 @@ class SRPlayer extends AudioWorkletProcessor {
       this.mod = lib._openmpt_module_create_from_memory(dataPtr, bytes.length, 0, 0, 0);
       lib._free(dataPtr);
       lib._openmpt_module_set_repeat_count(this.mod, -1); // loop forever
+      if (startSeconds) this.seek(startSeconds); // start this part at its position in the track
       this.bufPtr = lib._malloc(QUANTUM * 2 * 4); // interleaved stereo float32
       this.ready = true;
       this.port.postMessage({ type: 'ready' });
     });
+  }
+
+  /** Jump to `seconds` in the module (libopenmpt clamps to the song length). */
+  seek(seconds) {
+    if (this.mod && this.lib?._openmpt_module_set_position_seconds) {
+      this.lib._openmpt_module_set_position_seconds(this.mod, seconds);
+    }
   }
 
   process(_inputs, outputs) {

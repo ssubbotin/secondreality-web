@@ -19,10 +19,19 @@ const handle = createRenderer({
 
 // Pick the effect via ?effect=plasma|rotozoomer|techno (default techno). MUSIC1 is the techno
 // module; the other parts pair with MUSIC0 (confirm by ear — see plan open items).
-const which = new URLSearchParams(location.search).get('effect') ?? 'techno';
+const params = new URLSearchParams(location.search);
+const which = params.get('effect') ?? 'techno';
+
+// Each part starts the track at its own position. PLACEHOLDERS — the original syncs parts to the
+// song's +++ order markers, not a seek table, so these need deriving/tuning. Override live with ?seek=.
+const SEEK_SECONDS: Record<string, number> = { techno: 0, plasma: 0, rotozoomer: 0 };
+const seekParam = params.get('seek');
+const startSeconds = seekParam !== null ? Number(seekParam) : (SEEK_SECONDS[which] ?? 0);
+
 const audio = new AudioEngine({
   workletUrl: '/worklets/player-worklet.js',
   moduleUrl: which === 'techno' ? '/music/MUSIC1.S3M' : '/music/MUSIC0.S3M',
+  startSeconds,
 });
 const music = new MusicSync();
 
@@ -33,16 +42,20 @@ const ui = new AbortController();
 // ?debug=true reveals the dev UI (play button, authentic toggle, part selector); default is minimal.
 const debug = new URLSearchParams(location.search).has('debug');
 
-// Audio needs a user gesture (autoplay policy). The first interaction anywhere starts it — so no play
-// button is needed in minimal mode (a click on the debug play button is just another pointerdown).
+// Audio needs a user gesture in normal browsers (autoplay policy keeps the AudioContext suspended).
+// We still try on load — that preloads the worklet/module and actually autoplays in permissive
+// contexts (installed PWA, high media-engagement, dev). If it stays blocked, a one-time hint asks for
+// a click; the first interaction resumes it. The sim is the music's slave, so it's frozen until then.
+let hint: HTMLElement | null = null;
 const startAudio = async (): Promise<void> => {
   await audio.start();
-  playBtn.textContent = '⏸ playing';
+  if (audio.isRunning) {
+    playBtn.textContent = '⏸ playing';
+    hint?.remove();
+    hint = null;
+  }
 };
-document.addEventListener('pointerdown', () => void startAudio(), {
-  once: true,
-  signal: ui.signal,
-});
+document.addEventListener('pointerdown', () => void startAudio(), { signal: ui.signal });
 
 try {
   await handle.ready;
@@ -59,6 +72,7 @@ const partsMenu = renderPartsMenu(which);
 
 // The rest of the dev controls (play button, authentic toggle) are revealed only with ?debug=true.
 if (debug) {
+  (globalThis as typeof globalThis & { srAudio?: AudioEngine }).srAudio = audio; // dev probe
   document.getElementById('ui')?.style.setProperty('display', 'block');
   authBox.addEventListener(
     'change',

@@ -4,11 +4,14 @@ import { deobfuscateS3M } from './stmik-module.js';
 export interface AudioEngineOptions {
   workletUrl: string; // e.g. '/worklets/player-worklet.js'
   moduleUrl: string; // e.g. '/music/MUSIC0.S3M'
+  /** Where in the track this part starts (seconds). Each part has its own position in the song. */
+  startSeconds?: number;
 }
 
 export class AudioEngine {
   readonly clock = new AudioClock();
   private ctx: AudioContext | null = null;
+  private node: AudioWorkletNode | null = null;
   private started = false;
 
   constructor(private readonly opts: AudioEngineOptions) {}
@@ -35,8 +38,9 @@ export class AudioEngine {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { moduleData },
+      processorOptions: { moduleData, startSeconds: this.opts.startSeconds ?? 0 },
     });
+    this.node = node;
 
     node.port.onmessage = (e: MessageEvent) => {
       const m = e.data as { type: string } & Partial<PositionReport>;
@@ -63,6 +67,11 @@ export class AudioEngine {
 
   setAvOffset(seconds: number): void {
     this.clock.avOffset = seconds;
+  }
+
+  /** Jump the track to `seconds` (the clock re-anchors on the next worklet position report). */
+  seek(seconds: number): void {
+    this.node?.port.postMessage({ type: 'seek', seconds });
   }
 
   get isRunning(): boolean {

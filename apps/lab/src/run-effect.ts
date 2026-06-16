@@ -57,9 +57,18 @@ export async function runEffect(effect: Effect, deps: RunEffectDeps): Promise<()
   blit.setSource(gpu.texture);
 
   let frameNumber = 0;
-  const loop = startLoop((dt) => {
+  let lastSong = 0;
+  const loop = startLoop((rafDt) => {
+    const clock = music.resolve(audio.sample());
+    // Hybrid clock: until the track is actually playing, advance on wall-time so the demo animates
+    // immediately (no frozen-until-click). Once audio runs, slave the sim to the music — advance by
+    // elapsed SONG-seconds (pause → freeze; loop-wrap → one clamped frame) so it stays locked to the
+    // track. rAF always paces rendering.
+    const songDt = Math.min(0.1, Math.max(0, clock.songSeconds - lastSong));
+    lastSong = clock.songSeconds;
+    const dt = audio.isRunning ? songDt : rafDt;
     const frame: FrameContext = {
-      clock: music.resolve(audio.sample()),
+      clock,
       dt,
       frameNumber: frameNumber++,
       cueTime: 0,
