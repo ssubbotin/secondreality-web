@@ -37,12 +37,11 @@ export function computeMusplus(zplus: number, row: number): number {
 /**
  * Reproduce the DIS muscode_6 channels from the live within-pattern row.
  *
- * `muscode` (np_zinfo) is set only by the ST3 Zxx command — both shipped modules (MUSIC0/MUSIC1)
- * carry zero Zxx, so it holds its initial 0. `musrow` is the raw row. `musplus` is computed from
- * the row via {@link computeMusplus}; `zplus` defaults to 3 — the value for a section bracketed by
- * `+++` order markers (the dominant case). Deriving the true per-order `zplus` from the module's
- * `+++` order-list markers is deferred until effects consume musplus and the order-list mapping can
- * be confirmed by ear (libopenmpt collapses `+++` entries — see DIS/DISINT.ASM:252-271, STMIK 0x442d).
+ * `muscode` (np_zinfo) is set only by the ST3 Zxx command — both shipped modules (MUSIC0/MUSIC1) carry
+ * zero Zxx, so it holds its initial 0. `musrow` is the raw row. `musplus` is computed from the row via
+ * {@link computeMusplus} and the supplied `zplus` phase. In production the caller (MusicSync) passes the
+ * real per-order `zplus` from the module's `+++` order markers (see sync/order-markers.ts); the
+ * `zplus = 3` default — a section bracketed by markers — applies only before that table loads.
  */
 export function reconstructSync(row: number, zplus = 3): SyncChannels {
   return { muscode: 0, musplus: computeMusplus(zplus, row), musrow: row };
