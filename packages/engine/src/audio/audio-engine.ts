@@ -1,3 +1,4 @@
+import { computeZplusTable } from '../sync/order-markers.js';
 import { AudioClock, type ClockSample, type PositionReport } from './clock.js';
 import { deobfuscateS3M } from './stmik-module.js';
 
@@ -12,6 +13,7 @@ export class AudioEngine {
   readonly clock = new AudioClock();
   private ctx: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
+  private _zplusTable: Int8Array | null = null;
   private started = false;
 
   constructor(private readonly opts: AudioEngineOptions) {}
@@ -32,7 +34,9 @@ export class AudioEngine {
     // The shipped MUSIC*.S3M are Future Crew's original STMIK files, whose pattern bodies are
     // obfuscated — de-obfuscate them into a standard S3M before libopenmpt parses (see stmik-module).
     const raw = await fetch(this.opts.moduleUrl).then((r) => r.arrayBuffer());
-    const moduleData = deobfuscateS3M(raw).buffer;
+    const deob = deobfuscateS3M(raw);
+    this._zplusTable = computeZplusTable(deob); // build before the buffer is handed to the worklet
+    const moduleData = deob.buffer;
 
     const node = new AudioWorkletNode(ctx, 'sr-player', {
       numberOfInputs: 0,
@@ -72,6 +76,11 @@ export class AudioEngine {
   /** Jump the track to `seconds` (the clock re-anchors on the next worklet position report). */
   seek(seconds: number): void {
     this.node?.port.postMessage({ type: 'seek', seconds });
+  }
+
+  /** Per-order np_zplus from the loaded module's +++ markers; null until start() decodes the module. */
+  get zplusTable(): Int8Array | null {
+    return this._zplusTable;
   }
 
   get isRunning(): boolean {
