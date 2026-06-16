@@ -17,8 +17,11 @@ const MUSIC0 = '/music/MUSIC0.S3M';
 const MUSIC1 = '/music/MUSIC1.S3M';
 
 export const EFFECTS: Record<string, EffectDef> = {
-  techno: { label: 'Techno bars', create: () => new TechnoBars(), moduleUrl: MUSIC1, seek: 15 },
-  rotozoomer: { label: 'Rotozoomer', create: () => new Rotozoomer(), moduleUrl: MUSIC0, seek: 0 },
+  // Seeks derived from the released demo (run in DOSBox, audio cross-correlated to the modules):
+  // techno is ~77s into MUSIC1; rotozoomer ~85s into MUSIC0. Plasma shares MUSIC0 but its exact spot
+  // was ambiguous (rendered rotozoomed at a module transition), so it stays 0 — distinct from rotozoomer.
+  techno: { label: 'Techno bars', create: () => new TechnoBars(), moduleUrl: MUSIC1, seek: 77 },
+  rotozoomer: { label: 'Rotozoomer', create: () => new Rotozoomer(), moduleUrl: MUSIC0, seek: 85 },
   plasma: { label: 'Plasma', create: () => new Plasma(), moduleUrl: MUSIC0, seek: 0 },
 };
 
