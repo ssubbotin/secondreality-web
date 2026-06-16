@@ -7,7 +7,7 @@ import {
   SRGBColorSpace,
   UnsignedByteType,
 } from 'three';
-import { float, floor, mod, texture as textureNode, uniform, uv, vec2 } from 'three/tsl';
+import { float, floor, mix, mod, texture as textureNode, uniform, uv, vec2 } from 'three/tsl';
 import {
   type RenderTarget as GpuRenderTarget,
   MeshBasicNodeMaterial,
@@ -36,6 +36,31 @@ function tableTexture(values: ArrayLike<number>): DataTexture {
 }
 
 /**
+ * Build a 256×1 palette LUT from VGA DAC values (0..63 → ×4). Tagged sRGB so the sample-decode cancels
+ * the output sRGB-encode and the bytes land verbatim. IMPORTANT: this is a single upload-with-data — it
+ * is NOT mutated/re-uploaded per frame. three's WebGL backend doesn't reliably re-upload a mutated
+ * DataTexture (the palette froze → wrong colours/black on WebGL2/Firefox), so the per-frame cross-fade
+ * is done in the shader (two of these LUTs + a fade uniform); these textures change only per section.
+ */
+function paletteTexture(rgb?: Uint8Array): DataTexture {
+  const data = new Uint8Array(256 * 4);
+  if (rgb) {
+    for (let i = 0; i < 256; i++) {
+      data[i * 4] = (rgb[i * 3] ?? 0) * 4;
+      data[i * 4 + 1] = (rgb[i * 3 + 1] ?? 0) * 4;
+      data[i * 4 + 2] = (rgb[i * 3 + 2] ?? 0) * 4;
+      data[i * 4 + 3] = 255;
+    }
+  }
+  const tex = new DataTexture(data, 256, 1, RGBAFormat, UnsignedByteType);
+  tex.minFilter = NearestFilter;
+  tex.magFilter = NearestFilter;
+  tex.colorSpace = SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * The plasma field + palette pass, reproducing ASMYT.ASM `plzline` over column `ccc` (0..83) and
  * line `yy` (0..279). Per pixel: idx = psini[8·ccc + lsini16[yy−4·ccc+p2+320] + p1] +
  * psini[2·yy − 4·ccc + lsini4[yy+16·ccc+p4] + p3 + 320], all masked to each table's size; idx (mod
@@ -46,7 +71,13 @@ export class PlasmaField {
   private readonly psini = tableTexture(buildPsini());
   private readonly lsini4 = tableTexture(buildLsini4());
   private readonly lsini16 = tableTexture(buildLsini16());
-  private readonly lut: DataTexture;
+  // Two palette LUTs cross-faded in the shader by `fadeU` (0 = from, 1 = to). They are swapped only at
+  // section boundaries — never mutated per frame — so WebGL2 renders them reliably (see paletteTexture).
+  private lutFrom = paletteTexture();
+  private lutTo = paletteTexture();
+  private readonly lutFromSample: ReturnType<typeof textureNode>;
+  private readonly lutToSample: ReturnType<typeof textureNode>;
+  private readonly fadeU = uniform(1);
   private readonly p1 = uniform(3500);
   private readonly p2 = uniform(2300);
   private readonly p3 = uniform(3900);
@@ -60,14 +91,6 @@ export class PlasmaField {
   private readonly quad: QuadMesh;
 
   constructor() {
-    // 256×1 palette LUT; bytes are literal VGA DAC values (6-bit→8-bit ×4). Tag sRGB so the
-    // sample-decode cancels the output sRGB-encode and the bytes land verbatim (Techno's lesson).
-    this.lut = new DataTexture(new Uint8Array(256 * 4), 256, 1, RGBAFormat, UnsignedByteType);
-    this.lut.minFilter = NearestFilter;
-    this.lut.magFilter = NearestFilter;
-    this.lut.colorSpace = SRGBColorSpace;
-    this.lut.needsUpdate = true;
-
     // Fetch table[i]: NearestFilter sample at ((i+0.5)/N, 0.5) → table[floor(i)].
     const fetch = (tex: DataTexture, i: ReturnType<typeof float>, n: number) =>
       textureNode(tex, vec2(i.add(float(0.5)).div(n), 0.5)).r;
@@ -121,20 +144,30 @@ export class PlasmaField {
     const parity = mod(floor(uv().x.mul(PLASMA_W)).add(floor(uv().y.mul(PLASMA_H))), 2);
     const idx = idxL.mul(parity.oneMinus()).add(idxK.mul(parity));
 
-    this.material.colorNode = textureNode(this.lut, vec2(idx.add(float(0.5)).div(256), 0.5));
+    // Cross-fade the two palette LUTs in the shader (fadeU 0..1); the per-frame change is the uniform,
+    // not a texture re-upload — which is what keeps WebGL2/Firefox correct.
+    const lutUv = vec2(idx.add(float(0.5)).div(256), 0.5);
+    this.lutFromSample = textureNode(this.lutFrom, lutUv);
+    this.lutToSample = textureNode(this.lutTo, lutUv);
+    this.material.colorNode = mix(this.lutFromSample, this.lutToSample, this.fadeU);
     this.quad = new QuadMesh(this.material);
   }
 
-  /** Upload a fresh 256×RGB palette (values 0..63) as the LUT for this frame. */
-  setPalette(rgb: Uint8Array): void {
-    const data = this.lut.image.data as Uint8Array;
-    for (let i = 0; i < 256; i++) {
-      data[i * 4] = (rgb[i * 3] ?? 0) * 4;
-      data[i * 4 + 1] = (rgb[i * 3 + 1] ?? 0) * 4;
-      data[i * 4 + 2] = (rgb[i * 3 + 2] ?? 0) * 4;
-      data[i * 4 + 3] = 255;
-    }
-    this.lut.needsUpdate = true;
+  /** Swap in the `from`→`to` palette pair (values 0..63) for a section. Called only on section change. */
+  setPalettes(from: Uint8Array, to: Uint8Array): void {
+    const oldFrom = this.lutFrom;
+    const oldTo = this.lutTo;
+    this.lutFrom = paletteTexture(from);
+    this.lutTo = paletteTexture(to);
+    this.lutFromSample.value = this.lutFrom;
+    this.lutToSample.value = this.lutTo;
+    oldFrom.dispose();
+    oldTo.dispose();
+  }
+
+  /** Set the cross-fade position between the two palettes (0 = from, 1 = to). Called per frame. */
+  setFade(t: number): void {
+    this.fadeU.value = t;
   }
 
   /** Set the k and l (scanline-interlaced) phase param sets for this frame. */
@@ -163,7 +196,8 @@ export class PlasmaField {
     this.psini.dispose();
     this.lsini4.dispose();
     this.lsini16.dispose();
-    this.lut.dispose();
+    this.lutFrom.dispose();
+    this.lutTo.dispose();
     this.material.dispose();
   }
 }
