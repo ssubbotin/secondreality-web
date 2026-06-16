@@ -10,8 +10,8 @@ import {
 import {
   LinearFilter,
   NearestFilter,
-  NoColorSpace,
   RepeatWrapping,
+  SRGBColorSpace,
   type Texture,
   TextureLoader,
 } from 'three';
@@ -25,7 +25,7 @@ export type LookMode = 'authentic' | 'modern';
 
 const SIM_HZ = 70; // original frame cadence
 const SIM_DT = 1 / SIM_HZ;
-const TEXTURE_URL = '/textures/rotozoom-index.png'; // served from apps/lab/public (raw palette indices)
+const TEXTURE_URL = '/textures/rotozoom.png'; // served from apps/lab/public (authentic palette baked in)
 
 export class Rotozoomer implements Effect {
   readonly id = 'rotozoomer';
@@ -44,7 +44,7 @@ export class Rotozoomer implements Effect {
     const tex = await new TextureLoader().loadAsync(TEXTURE_URL);
     tex.wrapS = RepeatWrapping;
     tex.wrapT = RepeatWrapping;
-    tex.colorSpace = NoColorSpace; // raw index data — must not be sRGB-decoded
+    tex.colorSpace = SRGBColorSpace; // baked-RGB picture
     tex.generateMipmaps = false;
     this.picture = tex;
   }

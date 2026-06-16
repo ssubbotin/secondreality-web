@@ -1,16 +1,14 @@
-# scripts/extract-rotozoom.py — convert the original LENS background into the rotozoomer INDEX texture.
+# scripts/extract-rotozoom.py — convert the original LENS background into the rotozoomer texture.
 # Source: /home/sergey/SecondReality/LENS/_LENSEXB.OBK (OMF: 16B header + 768B 6-bit palette + 320x200).
-# Output: apps/lab/public/textures/rotozoom-index.png (256x256, the rotpic crop from MAIN.C:359-368, with
-# the raw palette INDEX stored in R/G/B). The effect colours it through a vivid palette LUT at runtime — the
-# original rotozoomer's look comes from the palette over the index gradient, not the (brown) base palette.
+# Output: apps/lab/public/textures/rotozoom.png (256x256 RGB, the rotpic crop from MAIN.C:359-368 with the
+# authentic LENS palette applied — a warm/yellow/blue triad). Baked to RGB so the effect can linear-filter
+# real colours (smooth) instead of interpolating palette indices (which would smear across the bands).
 import os
 import struct
 import zlib
 
 OBK = os.environ.get("LENS_OBK", "/home/sergey/SecondReality/LENS/_LENSEXB.OBK")
-OUT = os.path.join(
-    os.path.dirname(__file__), "..", "apps", "lab", "public", "textures", "rotozoom-index.png"
-)
+OUT = os.path.join(os.path.dirname(__file__), "..", "apps", "lab", "public", "textures", "rotozoom.png")
 
 
 def linear_from_obk(path):
@@ -49,18 +47,19 @@ def write_png(path, w, h, rgb):
 
 
 buf = linear_from_obk(OBK)
+pal = buf[16 : 16 + 768]  # 6-bit VGA palette
 img = buf[784 : 784 + 64000]  # 320x200 palette indices
-idx = bytearray(256 * 256 * 3)
+rgb = bytearray(256 * 256 * 3)
 for y in range(256):
     a = (y * 10) // 11 - 18
     if a < 0 or a > 199:
         a = 0
     for x in range(256):
-        c = img[x + 32 + a * 320]  # raw palette index 0..63
+        c = img[x + 32 + a * 320]
         o = (x + y * 256) * 3
-        idx[o + 0] = c
-        idx[o + 1] = c
-        idx[o + 2] = c
+        rgb[o + 0] = min(255, pal[c * 3 + 0] * 4)
+        rgb[o + 1] = min(255, pal[c * 3 + 1] * 4)
+        rgb[o + 2] = min(255, pal[c * 3 + 2] * 4)
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
-write_png(OUT, 256, 256, idx)
+write_png(OUT, 256, 256, rgb)
 print("wrote", os.path.abspath(OUT))
