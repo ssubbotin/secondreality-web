@@ -27,17 +27,22 @@ const audio = new AudioEngine({
 const music = new MusicSync();
 
 // Scope the UI listeners to an AbortController so HMR can remove them in one shot — otherwise each
-// reload stacks another listener on the persistent #play / #authentic elements.
+// reload stacks another listener on the persistent elements.
 const ui = new AbortController();
 
-playBtn.addEventListener(
-  'click',
-  async () => {
-    await audio.start();
-    playBtn.textContent = '⏸ playing';
-  },
-  { signal: ui.signal },
-);
+// ?debug=true reveals the dev UI (play button, authentic toggle, part selector); default is minimal.
+const debug = new URLSearchParams(location.search).has('debug');
+
+// Audio needs a user gesture (autoplay policy). The first interaction anywhere starts it — so no play
+// button is needed in minimal mode (a click on the debug play button is just another pointerdown).
+const startAudio = async (): Promise<void> => {
+  await audio.start();
+  playBtn.textContent = '⏸ playing';
+};
+document.addEventListener('pointerdown', () => void startAudio(), {
+  once: true,
+  signal: ui.signal,
+});
 
 try {
   await handle.ready;
@@ -48,16 +53,21 @@ try {
 
 const effect: Effect & { setMode(m: 'authentic' | 'modern'): void } =
   which === 'plasma' ? new Plasma() : which === 'rotozoomer' ? new Rotozoomer() : new TechnoBars();
-authBox.addEventListener(
-  'change',
-  () => {
-    effect.setMode(authBox.checked ? 'authentic' : 'modern');
-  },
-  { signal: ui.signal },
-);
+
+// The part selector is always on — it's the dev navigation between effects.
+const partsMenu = renderPartsMenu(which);
+
+// The rest of the dev controls (play button, authentic toggle) are revealed only with ?debug=true.
+if (debug) {
+  document.getElementById('ui')?.style.setProperty('display', 'block');
+  authBox.addEventListener(
+    'change',
+    () => effect.setMode(authBox.checked ? 'authentic' : 'modern'),
+    { signal: ui.signal },
+  );
+}
 
 const teardown = await runEffect(effect, { handle, canvas, audio, music });
-const partsMenu = renderPartsMenu(which);
 
 // Tear down the previous instance before Vite swaps the module, so reloads don't accumulate
 // orphaned RAF loops, render targets, or duplicate listeners.

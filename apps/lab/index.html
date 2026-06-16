@@ -11,16 +11,18 @@
         position: fixed; top: 8px; left: 8px; font: 12px monospace;
         color: #0f0; background: rgba(0,0,0,.5); padding: 4px 8px; white-space: pre;
       }
+      /* Empty by default (only error messages set its text) — hide it so there's no stray black box. */
+      #hud:empty { display: none; }
     </style>
   </head>
   <body>
     <canvas id="c"></canvas>
-    <div id="hud">press play</div>
-    <div id="ui" style="position:fixed;bottom:8px;left:8px;font:12px monospace;color:#0f0">
+    <!-- #hud is for error messages only (empty by default). Dev controls (#ui) and the part
+         selector are shown only with ?debug=true; the default view is minimal (click to start audio). -->
+    <div id="hud"></div>
+    <div id="ui" style="position:fixed;bottom:8px;left:8px;font:12px monospace;color:#0f0;display:none">
       <button id="play" type="button">▶ play</button>
       <label><input id="authentic" type="checkbox" /> authentic</label>
-      <label>A/V offset <input id="off" type="range" min="-0.2" max="0.2" step="0.005" value="0" /></label>
-      <span id="offval">0ms</span>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
