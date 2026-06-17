@@ -34,6 +34,20 @@ describe('tunnel sim', () => {
     expect(s.cy[99]).toBe(expY);
   });
 
+  it('keeps all three x-terms when sx != sy (the cosit terms no longer cancel)', () => {
+    const s = createTunnelState();
+    s.sx = 50;
+    s.sy = 30; // distinct counters: cosit[sy] and cosit[sx] are different, so neither cancels
+    stepTunnel(s, sinit, cosit);
+    // x uses cosit[sy] - sinit[sy*3] - cosit[sx]; with sy=30,sx=50 the third term is exercised.
+    const expX = (cosit[30 & 2047] ?? 0) - (sinit[(30 * 3) & 4095] ?? 0) - (cosit[50 & 2047] ?? 0);
+    const expY = (sinit[(50 * 2) & 4095] ?? 0) - (cosit[50 & 2047] ?? 0);
+    expect(s.cx[99]).toBe(expX);
+    expect(s.cy[99]).toBe(expY);
+    // Guard against accidental cancellation: the dropped third cosit[sx] term is genuinely non-zero.
+    expect(cosit[50 & 2047] ?? 0).not.toBe(0);
+  });
+
   it('shifts the ring buffer down one each tick (older positions move toward index 0)', () => {
     const s = createTunnelState();
     stepTunnel(s, sinit, cosit); // tick1: cc[99]=64
