@@ -17,7 +17,7 @@ const PARTS: readonly Part[] = [
   { n: 2, name: 'Opening texts II', effect: null },
   { n: 3, name: 'Opening texts III', effect: null },
   { n: 4, name: 'Glenz vectors', effect: null },
-  { n: 5, name: 'Dot tunnel', effect: null },
+  { n: 5, name: 'Dot tunnel', effect: 'dottunnel' },
   { n: 6, name: 'Techno bars', effect: 'techno' },
   { n: 7, name: 'Panic fake', effect: null },
   { n: 8, name: 'Vector I — Space battle', effect: null },
