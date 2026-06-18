@@ -11,4 +11,5 @@ export * from './sync/mframe.js';
 export * from './sync/music-sync.js';
 export * from './sync/order-markers.js';
 export * from './sync/reconstruct.js';
+export * from './text/index.js';
 export * from './types.js';
