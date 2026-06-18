@@ -1,0 +1,2 @@
+# Vendored original data oracles — preserve verbatim bytes (no EOL normalization).
+*.INC -text
