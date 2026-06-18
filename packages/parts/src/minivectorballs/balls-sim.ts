@@ -17,6 +17,8 @@ export const DOTNUM = 512;
 export const DROPPER_START = 22000;
 export const GRAVITY_BOTTOM = 8105; // MAIN.C overrides the asm default 8000
 export const VEKE = 2450; // MAIN.C self-exit frame; the lab loops at this budget
+/** Palette index plotted for each ball's shadow dot (`mov ax,87+87*256`). */
+export const SHADOW_INDEX = 87;
 
 /** Frame thresholds for the phase machine (MAIN.C inner loop). */
 const PHASE_SWIRL_END = 500;
