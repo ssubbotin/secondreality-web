@@ -1,3 +1,4 @@
+export * from './assets/index.js';
 export * from './audio/audio-engine.js';
 export * from './audio/clock.js';
 export * from './audio/stmik-module.js';
