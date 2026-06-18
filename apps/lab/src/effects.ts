@@ -1,11 +1,15 @@
 import type { Effect } from '@sr/engine';
 import {
+  Alku1,
   Comanche,
   DDStars,
   DotTunnel,
   Endpic,
+  Forest,
   Glenz,
+  Lens,
   MiniVectorBalls,
+  Panic,
   Plasma,
   Plasmacube,
   Rotozoomer,
@@ -48,6 +52,10 @@ export const EFFECTS: Record<string, EffectDef> = {
   comanche: { label: '3D sinus field', create: () => new Comanche(), moduleUrl: MUSIC0, seek: 0 },
   glenz: { label: 'Glenz vectors', create: () => new Glenz(), moduleUrl: MUSIC0, seek: 0 },
   endpic: { label: 'End picture flash', create: () => new Endpic(), moduleUrl: MUSIC1, seek: 0 },
+  alku1: { label: 'Opening texts I', create: () => new Alku1(), moduleUrl: MUSIC0, seek: 0 },
+  panic: { label: 'Panic fake', create: () => new Panic(), moduleUrl: MUSIC0, seek: 0 },
+  lens: { label: 'Lens', create: () => new Lens(), moduleUrl: MUSIC0, seek: 0 },
+  forest: { label: 'Mountain scroller', create: () => new Forest(), moduleUrl: MUSIC0, seek: 0 },
 };
 
 export const DEFAULT_EFFECT = 'techno';

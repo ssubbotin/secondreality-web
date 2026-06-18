@@ -1,9 +1,13 @@
+export { Alku1 } from './alku1/alku1.js';
 export { Comanche } from './comanche/comanche.js';
 export { DDStars } from './ddstars/ddstars.js';
 export { DotTunnel } from './dot-tunnel/dot-tunnel.js';
 export { Endpic } from './endpic/endpic.js';
+export { Forest } from './forest/forest.js';
 export { Glenz } from './glenz/glenz.js';
+export { Lens } from './lens/lens.js';
 export { MiniVectorBalls } from './minivectorballs/minivectorballs.js';
+export { Panic } from './panic/panic.js';
 export { Plasma } from './plasma/plasma.js';
 export { Plasmacube } from './plasmacube/plasmacube.js';
 export { Rotozoomer } from './rotozoomer/rotozoomer.js';

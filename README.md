@@ -11,13 +11,14 @@ AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 **▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
 (single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
 
-> **Status: foundation complete, 10 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
-> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place; ten
-> effects (Glenz vectors, Dot tunnel, Techno bars, Desert Dream stars, Rotozoomer, Plasma, Plasmacube,
-> MiniVectorBalls, the 3D sinus field, and the End picture flash) are faithful and merged; and the `.U`/`.UH`
-> VGA-picture pipeline (RLE decoder + `@sr/engine` loader, ported from the original `READP.C`) is in place.
-> The remaining 10 parts — the text, scroller, and 3D-model vector scenes — are being ported in parallel
-> waves on top of that pipeline.
+> **Status: foundation complete, 14 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
+> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place;
+> fourteen effects (Opening texts I, Glenz vectors, Dot tunnel, Techno bars, Panic fake, Desert Dream stars,
+> Lens, Rotozoomer, Plasma, Plasmacube, MiniVectorBalls, Mountain scroller, the 3D sinus field, and the End
+> picture flash) are faithful and merged; and the asset pipelines — the `.U`/`.UH` and ILBM (`.LBM`)
+> VGA-picture decoders plus a bitmap-font text layer — are in place. The remaining 6 parts (Opening texts
+> II & III, the mirror-ball water scroll, the credits scroll, and the two baked 3D vector scenes) are being
+> ported in parallel waves on top of those pipelines.
 
 ## Quick start
 
@@ -39,28 +40,28 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 
 | # | Part | Original | Rendering technique | State |
 |--:|------|----------|---------------------|:-----:|
-| 1 | Opening texts I | `ALKU` | 2D text / picture flash | ⬜ |
+| 1 | **Opening texts I** | `ALKU` | Bitmap-font text reveal over a copper backdrop | ✅ |
 | 2 | Opening texts II | `ALKU` | 2D text / picture flash | ⬜ |
 | 3 | Opening texts III | `ALKU` | 2D text / picture flash | ⬜ |
 | 4 | **Glenz vectors** | `GLENZ` | Real-time additive "glenz" solids over a copper-bar palette (CPU raster) | ✅ |
 | 5 | **Dot tunnel** | `TUNNELI` | Concentric dot rings receding on a sine-driven delayed-camera path (CPU raster) | ✅ |
 | 6 | **Techno bars** | `TECHNO` | Fullscreen raster — rotated-coordinate interference + plane accumulation | ✅ |
-| 7 | Panic fake | `PANIC` | Picture flash / fake reboot | ⬜ |
+| 7 | **Panic fake** | `PANIC` | Fake-crash gag — picture wash / collapse / wipe (frame-counted) | ✅ |
 | 8 | Vector Part I — Space battle | `VISU → U2A` | Baked 3D vector scene (glTF + animation track) | ⬜ |
 | 9 | Mirror-ball water scroll | `WATER` | 2D scroller + raytraced background + per-scanline ripple | ⬜ |
 | 10 | **Desert Dream stars** | `DDSTARS` | Procedural 3D star field — reciprocal-depth projection, depth-banded brightness, delayed mirror | ✅ |
-| 11 | Lens | `LENS` | Per-pixel displacement (baked displacement texture) | ⬜ |
+| 11 | **Lens** | `LENS` | Per-pixel magnifying-lens displacement of a VGA picture | ✅ |
 | 12 | **Rotozoomer** | `LENS` | Affine warp (rotation + zoom) of a tiling picture | ✅ |
 | 13 | **Plasma** | `PLZPART` | Fullscreen raster — diagonal summed sine-table field + k/l interlace + animated palette | ✅ |
 | 14 | **Plasmacube** | `PLZPART` | Texture-mapped rotating cube (sine-tile faces, affine CPU raster) | ✅ |
 | 15 | **MiniVectorBalls** | `DOTS` | Procedural ball fountain — fixed-point phase machine, gravity + bounce | ✅ |
-| 16 | Mountain scroller | `FOREST` | 2D bitmap scroller | ⬜ |
+| 16 | **Mountain scroller** | `FOREST` | Parallax bitmap scroll (ILBM layers + scroll-path data) | ✅ |
 | 17 | **3D Sinus field ("Comanche")** | `COMAN` | Forward voxel-terrain raster over a sine-driven heightfield | ✅ |
 | 18 | Vector Part II — KewlComplex city | `VISU → U2E` | Baked 3D vector scene (glTF + animation track) | ⬜ |
 | 19 | **End picture flash** | `ENDPIC` | White-flash fade into a decoded VGA title picture (`.U`/RLE pipeline) | ✅ |
 | 20 | Credits / greetings scroll | `CREDITS` / `ENDSCRL` | 2D scroller | ⬜ |
 
-**10 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
+**14 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
 3D vector, particle/dot systems, 2D scrollers) are detailed in the design spec under
 `docs/superpowers/specs/`.
 
@@ -76,10 +77,12 @@ and the design spec.
 ## Project layout
 
 ```
-packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math,
-                                and the picture asset pipeline (.U/.UH decoder + loader) in src/assets
-packages/parts    @sr/parts   — the demo effects (glenz, dot-tunnel, techno-bars, ddstars, rotozoomer,
-                                plasma, plasmacube, minivectorballs, comanche, endpic)
+packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math, the
+                                picture asset pipeline (.U/.UH + ILBM decoders + loader) in src/assets,
+                                and the bitmap-font text layer in src/text
+packages/parts    @sr/parts   — the demo effects (alku1, glenz, dot-tunnel, techno-bars, panic, ddstars,
+                                lens, rotozoomer, plasma, plasmacube, minivectorballs, forest, comanche,
+                                endpic)
 apps/lab          @sr/lab     — Vite host that mounts a single effect for development
 docs/superpowers  design spec, per-effect plans, and handoff/status notes
 ```
