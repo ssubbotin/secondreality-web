@@ -77,8 +77,16 @@ describe('buildFont (FONA glyph segmentation)', () => {
     // 5-wide × 2-tall sheet: col0 empty, cols1-2 glyph 'X', col3 empty, col4 glyph 'Y'.
     const w = 5;
     const sheet = Uint8Array.from([
-      0, 1, 2, 0, 3, //
-      0, 1, 0, 0, 0,
+      0,
+      1,
+      2,
+      0,
+      3, //
+      0,
+      1,
+      0,
+      0,
+      0,
     ]);
     const font = buildFont(sheet, w, 2, 'XY');
     expect(font.glyphs.get('X')).toEqual({ ch: 'X', x: 1, width: 2 });

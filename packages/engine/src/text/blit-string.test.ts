@@ -5,8 +5,16 @@ import { buildFont } from './font.js';
 /** A tiny 2-glyph font on a 5×2 sheet: 'X' = cols1-2, 'Y' = col4. */
 function tinyFont() {
   const sheet = Uint8Array.from([
-    0, 1, 2, 0, 3, //
-    0, 3, 1, 0, 2,
+    0,
+    1,
+    2,
+    0,
+    3, //
+    0,
+    3,
+    1,
+    0,
+    2,
   ]);
   return buildFont(sheet, 5, 2, 'XY');
 }
