@@ -1,5 +1,5 @@
 import type { Effect } from '@sr/engine';
-import { Plasma, Rotozoomer, TechnoBars } from '@sr/parts';
+import { DotTunnel, Plasma, Rotozoomer, TechnoBars } from '@sr/parts';
 
 /** Every part implements Effect plus the authentic/modern mode toggle. */
 export type ModeEffect = Effect & { setMode(m: 'authentic' | 'modern'): void };
@@ -20,6 +20,7 @@ export const EFFECTS: Record<string, EffectDef> = {
   // Seeks derived from the released demo (run in DOSBox, audio cross-correlated to the modules):
   // techno is ~77s into MUSIC1; rotozoomer ~85s into MUSIC0. Plasma shares MUSIC0 but its exact spot
   // was ambiguous (rendered rotozoomed at a module transition), so it stays 0 — distinct from rotozoomer.
+  dottunnel: { label: 'Dot tunnel', create: () => new DotTunnel(), moduleUrl: MUSIC0, seek: 30 },
   techno: { label: 'Techno bars', create: () => new TechnoBars(), moduleUrl: MUSIC1, seek: 77 },
   rotozoomer: { label: 'Rotozoomer', create: () => new Rotozoomer(), moduleUrl: MUSIC0, seek: 85 },
   plasma: { label: 'Plasma', create: () => new Plasma(), moduleUrl: MUSIC0, seek: 0 },
