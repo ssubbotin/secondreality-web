@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { createFieldState, stepField } from './field-sim.js';
 import { buildHeightOffset, FIELD_H, FIELD_W, rasterColumn, rasterField } from './raster.js';
-import { buildSin1024, buildWave2, buildZwave, parseWaveField } from './tables.js';
+import { buildSin1024, buildZwave, parseWaveField } from './tables.js';
 
 const fixture = (name: string): Buffer =>
   readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)));
