@@ -11,10 +11,10 @@ AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 **▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
 (single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
 
-> **Status: foundation complete, 3 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
+> **Status: foundation complete, 4 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
 > master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place and the
-> first three effects (Techno bars, Plasma, Rotozoomer) are faithful and merged. The remaining 17 parts are
-> being ported one at a time.
+> first four effects (Techno bars, Plasma, Rotozoomer, Dot tunnel) are faithful and merged. The remaining 16
+> parts are being ported one at a time.
 
 ## Quick start
 
@@ -40,7 +40,7 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 2 | Opening texts II | `ALKU` | 2D text / picture flash | ⬜ |
 | 3 | Opening texts III | `ALKU` | 2D text / picture flash | ⬜ |
 | 4 | Glenz vectors | `GLENZ` | Real-time 3D vectors, additive + per-scanline copper palette | ⬜ |
-| 5 | Dot tunnel | `TUNNELI` | Particle / feedback trails | ⬜ |
+| 5 | **Dot tunnel** | `TUNNELI` | Concentric dot rings receding on a sine-driven delayed-camera path (CPU raster) | ✅ |
 | 6 | **Techno bars** | `TECHNO` | Fullscreen raster — rotated-coordinate interference + plane accumulation | ✅ |
 | 7 | Panic fake | `PANIC` | Picture flash / fake reboot | ⬜ |
 | 8 | Vector Part I — Space battle | `VISU → U2A` | Baked 3D vector scene (glTF + animation track) | ⬜ |
@@ -57,7 +57,7 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 19 | End picture flash | `ENDPIC` | Picture flash | ⬜ |
 | 20 | Credits / greetings scroll | `CREDITS` / `ENDSCRL` | 2D scroller | ⬜ |
 
-**3 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
+**4 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
 3D vector, particle/dot systems, 2D scrollers) are detailed in the design spec under
 `docs/superpowers/specs/`.
 
@@ -74,7 +74,7 @@ and the design spec.
 
 ```
 packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math
-packages/parts    @sr/parts   — the demo effects (currently: techno-bars)
+packages/parts    @sr/parts   — the demo effects (techno-bars, plasma, rotozoomer, dot-tunnel)
 apps/lab          @sr/lab     — Vite host that mounts a single effect for development
 docs/superpowers  design spec, per-effect plans, and handoff/status notes
 ```
