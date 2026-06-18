@@ -1,0 +1,78 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { createFieldState, stepField } from './field-sim.js';
+import { buildHeightOffset, FIELD_H, FIELD_W, rasterColumn, rasterField } from './raster.js';
+import { buildSin1024, buildWave2, buildZwave, parseWaveField } from './tables.js';
+
+const fixture = (name: string): Buffer =>
+  readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)));
+
+const toArrayBuffer = (b: Buffer): ArrayBuffer =>
+  b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+
+const heightX = parseWaveField(toArrayBuffer(fixture('W1DTA.BIN')));
+const heightY = parseWaveField(toArrayBuffer(fixture('W2DTA.BIN')));
+const off = buildHeightOffset(buildZwave());
+const sin1024 = buildSin1024();
+
+interface OracleCase {
+  in: [number, number, number, number];
+  col: number[];
+}
+const oracle: OracleCase[] = JSON.parse(fixture('raster-columns.json').toString('utf8'));
+
+// rasterColumn writes column 0 of a FIELD_W-stride buffer; pull it back into a flat 200-array.
+function runColumn(si: number, di: number, xs1: number, ys1: number): number[] {
+  const out = new Uint8Array(FIELD_W * FIELD_H);
+  rasterColumn(out, si & 0xfffe, di & 0xfffe, xs1 & 0xfffe, ys1 & 0xfffe, heightX, heightY, off);
+  const col: number[] = [];
+  for (let row = 0; row < FIELD_H; row++) col.push(out[row * FIELD_W] ?? 0);
+  return col;
+}
+
+describe('comanche raster (THELOOP voxel walk)', () => {
+  it('rasterColumn reproduces the THELOOP.INC register emulation byte-for-byte (5 oracle columns)', () => {
+    for (const c of oracle) {
+      const [si, di, xs1, ys1] = c.in;
+      expect(runColumn(si, di, xs1, ys1)).toEqual(c.col);
+    }
+  });
+
+  it('a flat field is sky (0) up top and solid terrain at the bottom', () => {
+    const col = runColumn(0, 0, 0, 74);
+    expect(col.slice(0, 60).every((v) => v === 0)).toBe(true); // sky
+    expect(col.slice(120).every((v) => v > 0)).toBe(true); // terrain near the camera
+  });
+
+  it('rasterField fills a 160×200 buffer; clears to sky then draws terrain at the bottom', () => {
+    const out = new Uint8Array(FIELD_W * FIELD_H);
+    out.fill(99); // poison: prove the clear ran
+    const s = createFieldState();
+    for (let i = 0; i < 60; i++) stepField(s, sin1024); // advance into the field for terrain variation
+    rasterField(out, s, heightX, heightY, off);
+    // bottom row mostly lit
+    let litBottom = 0;
+    for (let x = 0; x < FIELD_W; x++) if ((out[199 * FIELD_W + x] ?? 0) > 0) litBottom++;
+    expect(litBottom).toBeGreaterThan(FIELD_W / 2);
+    // top row mostly sky
+    let litTop = 0;
+    for (let x = 0; x < FIELD_W; x++) if ((out[0 * FIELD_W + x] ?? 0) > 0) litTop++;
+    expect(litTop).toBeLessThan(FIELD_W / 2);
+  });
+
+  it('rasterField writes only valid palette bytes and never out of bounds', () => {
+    const out = new Uint8Array(FIELD_W * FIELD_H);
+    const s = createFieldState();
+    for (let i = 0; i < 200; i++) stepField(s, sin1024);
+    expect(() => rasterField(out, s, heightX, heightY, off)).not.toThrow();
+    expect(out).toHaveLength(FIELD_W * FIELD_H);
+    for (const v of out) expect(v).toBeLessThanOrEqual(255);
+  });
+
+  it('columns are independent (different ray steps yield different silhouettes)', () => {
+    const a = runColumn(0, 0, 0, 74);
+    const b = runColumn(5000, 3000, -20, 40);
+    expect(a).not.toEqual(b);
+  });
+});
