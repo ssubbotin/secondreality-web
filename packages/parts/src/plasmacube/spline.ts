@@ -27,7 +27,11 @@ export interface SplinePoint {
  * ASM pop order) to {tx, ty, dis, kx, ky, kz, ls_kx, ls_ky}. Indices are clamped so a near-the-end
  * position never reads past the (static-tail) control list.
  */
-export function getspl(position: number, coef: Int32Array, rata: readonly RataPoint[]): SplinePoint {
+export function getspl(
+  position: number,
+  coef: Int32Array,
+  rata: readonly RataPoint[],
+): SplinePoint {
   const pt = position >> 8;
   const p = position & 255;
   const t0 = coef[p] ?? 0;

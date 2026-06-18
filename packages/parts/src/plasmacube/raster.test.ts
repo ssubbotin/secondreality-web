@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectedPoint } from './cube.js';
 import {
   countConst,
   lightDir,
@@ -7,7 +8,6 @@ import {
   rotateProject,
   sortFaces,
 } from './cube.js';
-import type { ProjectedPoint } from './cube.js';
 import { drawPoly, rasterCube, SCREEN_H, SCREEN_W } from './raster.js';
 import { getspl } from './spline.js';
 import { buildKosinit, buildRata, buildSini, buildSinit, buildSplineCoef } from './tables.js';
@@ -22,12 +22,7 @@ const tiles = buildTiles(sini);
 const dist = buildDist(sini);
 
 /** A flat axis-aligned screen quad (sx,sy); xx/yy/zz unused by the rasteriser. */
-const flatQuad = (
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-): ProjectedPoint[] => [
+const flatQuad = (x0: number, y0: number, x1: number, y1: number): ProjectedPoint[] => [
   { xx: 0, yy: 0, zz: 1, sx: x0, sy: y0 },
   { xx: 0, yy: 0, zz: 1, sx: x1, sy: y0 },
   { xx: 0, yy: 0, zz: 1, sx: x1, sy: y1 },

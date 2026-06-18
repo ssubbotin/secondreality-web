@@ -141,7 +141,12 @@ export interface LightDir {
  *   ls_x = ((sinit[ls_kx] >> 8) · (sinit[ls_ky] >> 8)) >> 7
  *   ls_z = ((sinit[ls_kx] >> 8) · (kosinit[ls_ky] >> 8)) >> 7
  */
-export function lightDir(lsKx: number, lsKy: number, sinit: Int16Array, kosinit: Int16Array): LightDir {
+export function lightDir(
+  lsKx: number,
+  lsKy: number,
+  sinit: Int16Array,
+  kosinit: Int16Array,
+): LightDir {
   const kx = lsKx & 1023;
   const ky = lsKy & 1023;
   const sKx = sar(sinit[kx] ?? 0, 8);

@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildSini } from './tables.js';
-import {
-  buildDist,
-  buildTile,
-  buildTiles,
-  DIST_H,
-  DIST_W,
-  TILE_H,
-  TILE_W,
-} from './texture.js';
+import { buildDist, buildTile, buildTiles, DIST_H, DIST_W, TILE_H, TILE_W } from './texture.js';
 
 const sini = buildSini();
 
