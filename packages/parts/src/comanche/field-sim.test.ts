@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CAMERA_LEVEL,
   COLS,
-  columnRay,
   COMAN_FRAMES,
+  columnRay,
   createFieldState,
   type FieldState,
   stepField,
