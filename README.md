@@ -11,12 +11,13 @@ AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 **▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
 (single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
 
-> **Status: foundation complete, 8 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
-> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place and
-> eight effects (Dot tunnel, Techno bars, Desert Dream stars, Rotozoomer, Plasma, Plasmacube,
-> MiniVectorBalls, and the 3D sinus field) are faithful and merged. The remaining 12 parts are being ported
-> in parallel waves; the next wave stands up the picture/font asset pipeline the text, scroller, and
-> background-overlay parts depend on.
+> **Status: foundation complete, 10 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
+> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place; ten
+> effects (Glenz vectors, Dot tunnel, Techno bars, Desert Dream stars, Rotozoomer, Plasma, Plasmacube,
+> MiniVectorBalls, the 3D sinus field, and the End picture flash) are faithful and merged; and the `.U`/`.UH`
+> VGA-picture pipeline (RLE decoder + `@sr/engine` loader, ported from the original `READP.C`) is in place.
+> The remaining 10 parts — the text, scroller, and 3D-model vector scenes — are being ported in parallel
+> waves on top of that pipeline.
 
 ## Quick start
 
@@ -41,7 +42,7 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 1 | Opening texts I | `ALKU` | 2D text / picture flash | ⬜ |
 | 2 | Opening texts II | `ALKU` | 2D text / picture flash | ⬜ |
 | 3 | Opening texts III | `ALKU` | 2D text / picture flash | ⬜ |
-| 4 | Glenz vectors | `GLENZ` | Real-time 3D vectors, additive + per-scanline copper palette | ⬜ |
+| 4 | **Glenz vectors** | `GLENZ` | Real-time additive "glenz" solids over a copper-bar palette (CPU raster) | ✅ |
 | 5 | **Dot tunnel** | `TUNNELI` | Concentric dot rings receding on a sine-driven delayed-camera path (CPU raster) | ✅ |
 | 6 | **Techno bars** | `TECHNO` | Fullscreen raster — rotated-coordinate interference + plane accumulation | ✅ |
 | 7 | Panic fake | `PANIC` | Picture flash / fake reboot | ⬜ |
@@ -56,10 +57,10 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 16 | Mountain scroller | `FOREST` | 2D bitmap scroller | ⬜ |
 | 17 | **3D Sinus field ("Comanche")** | `COMAN` | Forward voxel-terrain raster over a sine-driven heightfield | ✅ |
 | 18 | Vector Part II — KewlComplex city | `VISU → U2E` | Baked 3D vector scene (glTF + animation track) | ⬜ |
-| 19 | End picture flash | `ENDPIC` | Picture flash | ⬜ |
+| 19 | **End picture flash** | `ENDPIC` | White-flash fade into a decoded VGA title picture (`.U`/RLE pipeline) | ✅ |
 | 20 | Credits / greetings scroll | `CREDITS` / `ENDSCRL` | 2D scroller | ⬜ |
 
-**8 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
+**10 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
 3D vector, particle/dot systems, 2D scrollers) are detailed in the design spec under
 `docs/superpowers/specs/`.
 
@@ -75,9 +76,10 @@ and the design spec.
 ## Project layout
 
 ```
-packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math
-packages/parts    @sr/parts   — the demo effects (dot-tunnel, techno-bars, ddstars, rotozoomer, plasma,
-                                plasmacube, minivectorballs, comanche)
+packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math,
+                                and the picture asset pipeline (.U/.UH decoder + loader) in src/assets
+packages/parts    @sr/parts   — the demo effects (glenz, dot-tunnel, techno-bars, ddstars, rotozoomer,
+                                plasma, plasmacube, minivectorballs, comanche, endpic)
 apps/lab          @sr/lab     — Vite host that mounts a single effect for development
 docs/superpowers  design spec, per-effect plans, and handoff/status notes
 ```

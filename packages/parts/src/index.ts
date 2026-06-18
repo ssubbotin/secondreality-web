@@ -1,6 +1,8 @@
 export { Comanche } from './comanche/comanche.js';
 export { DDStars } from './ddstars/ddstars.js';
 export { DotTunnel } from './dot-tunnel/dot-tunnel.js';
+export { Endpic } from './endpic/endpic.js';
+export { Glenz } from './glenz/glenz.js';
 export { MiniVectorBalls } from './minivectorballs/minivectorballs.js';
 export { Plasma } from './plasma/plasma.js';
 export { Plasmacube } from './plasmacube/plasmacube.js';

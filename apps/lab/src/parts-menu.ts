@@ -16,7 +16,7 @@ const PARTS: readonly Part[] = [
   { n: 1, name: 'Opening texts I', effect: null },
   { n: 2, name: 'Opening texts II', effect: null },
   { n: 3, name: 'Opening texts III', effect: null },
-  { n: 4, name: 'Glenz vectors', effect: null },
+  { n: 4, name: 'Glenz vectors', effect: 'glenz' },
   { n: 5, name: 'Dot tunnel', effect: 'dottunnel' },
   { n: 6, name: 'Techno bars', effect: 'techno' },
   { n: 7, name: 'Panic fake', effect: null },
@@ -31,7 +31,7 @@ const PARTS: readonly Part[] = [
   { n: 16, name: 'Mountain scroller', effect: null },
   { n: 17, name: '3D Sinus field', effect: 'comanche' },
   { n: 18, name: 'Vector II — City', effect: null },
-  { n: 19, name: 'End picture flash', effect: null },
+  { n: 19, name: 'End picture flash', effect: 'endpic' },
   { n: 20, name: 'Credits / greetings', effect: null },
 ];
 

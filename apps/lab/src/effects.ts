@@ -3,6 +3,8 @@ import {
   Comanche,
   DDStars,
   DotTunnel,
+  Endpic,
+  Glenz,
   MiniVectorBalls,
   Plasma,
   Plasmacube,
@@ -44,6 +46,8 @@ export const EFFECTS: Record<string, EffectDef> = {
     seek: 0,
   },
   comanche: { label: '3D sinus field', create: () => new Comanche(), moduleUrl: MUSIC0, seek: 0 },
+  glenz: { label: 'Glenz vectors', create: () => new Glenz(), moduleUrl: MUSIC0, seek: 0 },
+  endpic: { label: 'End picture flash', create: () => new Endpic(), moduleUrl: MUSIC1, seek: 0 },
 };
 
 export const DEFAULT_EFFECT = 'techno';
