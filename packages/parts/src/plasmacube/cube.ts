@@ -105,18 +105,28 @@ export function rotateProject(
   tx: number,
   ty: number,
   dis: number,
+  xBias = 160 + 160,
+  yBias = 66,
 ): ProjectedPoint[] {
   const out: ProjectedPoint[] = [];
   for (const [x, y, z] of CUBE_POINTS) {
     const xx = s16(s16(sar(x * m.cxx, 1) + sar(y * m.cxy, 1) + sar(z * m.cxz, 1)) >> 7) + tx;
     const yy = s16(s16(sar(x * m.cyx, 1) + sar(y * m.cyy, 1) + sar(z * m.cyz, 1)) >> 7) + ty;
     const zz = s16(s16(sar(x * m.czx, 1) + sar(y * m.czy, 1) + sar(z * m.czz, 1)) >> 7) + dis;
-    const sx = cdiv(xx * 256, zz) + 160 + 160;
-    const sy = cdiv(yy * 142, zz) + 66;
+    const sx = cdiv(xx * 256, zz) + xBias;
+    const sy = cdiv(yy * 142, zz) + yBias;
     out.push({ xx, yy, zz, sx, sy });
   }
   return out;
 }
+
+/**
+ * Port re-centering: the original biased screen x by +320 / y by +66 to place the cube in its wide,
+ * copper-scrolled mode-X buffer. For our square 320×200 field we centre the cube directly with these
+ * biases (chosen so the steady-state spin fits with margin). The projection math is otherwise verbatim.
+ */
+export const PORT_X_BIAS = 165;
+export const PORT_Y_BIAS = 98;
 
 /** The light direction (calculate(), VECT.C:144-146): a 16-bit unit vector ×~128 from ls_kx/ls_ky. */
 export interface LightDir {
