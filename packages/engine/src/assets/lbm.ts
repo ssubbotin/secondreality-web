@@ -128,7 +128,10 @@ export function deinterleavePlanes(
         for (let b = 0; b < 8; b++) {
           const x = x0 + b;
           if (x >= width) break;
-          if (value & (0x80 >> b)) out[rowBase + x] |= bit;
+          if (value & (0x80 >> b)) {
+            const idx = rowBase + x;
+            out[idx] = (out[idx] ?? 0) | bit;
+          }
         }
       }
     }
