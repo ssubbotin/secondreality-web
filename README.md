@@ -11,10 +11,12 @@ AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 **▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
 (single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
 
-> **Status: foundation complete, 4 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
-> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place and the
-> first four effects (Techno bars, Plasma, Rotozoomer, Dot tunnel) are faithful and merged. The remaining 16
-> parts are being ported one at a time.
+> **Status: foundation complete, 8 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
+> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place and
+> eight effects (Dot tunnel, Techno bars, Desert Dream stars, Rotozoomer, Plasma, Plasmacube,
+> MiniVectorBalls, and the 3D sinus field) are faithful and merged. The remaining 12 parts are being ported
+> in parallel waves; the next wave stands up the picture/font asset pipeline the text, scroller, and
+> background-overlay parts depend on.
 
 ## Quick start
 
@@ -45,19 +47,19 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 7 | Panic fake | `PANIC` | Picture flash / fake reboot | ⬜ |
 | 8 | Vector Part I — Space battle | `VISU → U2A` | Baked 3D vector scene (glTF + animation track) | ⬜ |
 | 9 | Mirror-ball water scroll | `WATER` | 2D scroller + raytraced background + per-scanline ripple | ⬜ |
-| 10 | Desert Dream stars | `DDSTARS` | Particle star field | ⬜ |
+| 10 | **Desert Dream stars** | `DDSTARS` | Procedural 3D star field — reciprocal-depth projection, depth-banded brightness, delayed mirror | ✅ |
 | 11 | Lens | `LENS` | Per-pixel displacement (baked displacement texture) | ⬜ |
 | 12 | **Rotozoomer** | `LENS` | Affine warp (rotation + zoom) of a tiling picture | ✅ |
 | 13 | **Plasma** | `PLZPART` | Fullscreen raster — diagonal summed sine-table field + k/l interlace + animated palette | ✅ |
-| 14 | Plasmacube | `PLZPART` | Fullscreen raster plasma on a cube | ⬜ |
-| 15 | MiniVectorBalls | `DOTS` | Particle / instanced dot balls | ⬜ |
+| 14 | **Plasmacube** | `PLZPART` | Texture-mapped rotating cube (sine-tile faces, affine CPU raster) | ✅ |
+| 15 | **MiniVectorBalls** | `DOTS` | Procedural ball fountain — fixed-point phase machine, gravity + bounce | ✅ |
 | 16 | Mountain scroller | `FOREST` | 2D bitmap scroller | ⬜ |
-| 17 | 3D Sinus field ("Comanche") | `COMAN` | Heightfield raymarch — hand-written WGSL/GLSL | ⬜ |
+| 17 | **3D Sinus field ("Comanche")** | `COMAN` | Forward voxel-terrain raster over a sine-driven heightfield | ✅ |
 | 18 | Vector Part II — KewlComplex city | `VISU → U2E` | Baked 3D vector scene (glTF + animation track) | ⬜ |
 | 19 | End picture flash | `ENDPIC` | Picture flash | ⬜ |
 | 20 | Credits / greetings scroll | `CREDITS` / `ENDSCRL` | 2D scroller | ⬜ |
 
-**4 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
+**8 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
 3D vector, particle/dot systems, 2D scrollers) are detailed in the design spec under
 `docs/superpowers/specs/`.
 
@@ -74,7 +76,8 @@ and the design spec.
 
 ```
 packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math
-packages/parts    @sr/parts   — the demo effects (techno-bars, plasma, rotozoomer, dot-tunnel)
+packages/parts    @sr/parts   — the demo effects (dot-tunnel, techno-bars, ddstars, rotozoomer, plasma,
+                                plasmacube, minivectorballs, comanche)
 apps/lab          @sr/lab     — Vite host that mounts a single effect for development
 docs/superpowers  design spec, per-effect plans, and handoff/status notes
 ```

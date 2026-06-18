@@ -1,5 +1,14 @@
 import type { Effect } from '@sr/engine';
-import { DotTunnel, Plasma, Rotozoomer, TechnoBars } from '@sr/parts';
+import {
+  Comanche,
+  DDStars,
+  DotTunnel,
+  MiniVectorBalls,
+  Plasma,
+  Plasmacube,
+  Rotozoomer,
+  TechnoBars,
+} from '@sr/parts';
 
 /** Every part implements Effect plus the authentic/modern mode toggle. */
 export type ModeEffect = Effect & { setMode(m: 'authentic' | 'modern'): void };
@@ -24,6 +33,17 @@ export const EFFECTS: Record<string, EffectDef> = {
   techno: { label: 'Techno bars', create: () => new TechnoBars(), moduleUrl: MUSIC1, seek: 77 },
   rotozoomer: { label: 'Rotozoomer', create: () => new Rotozoomer(), moduleUrl: MUSIC0, seek: 85 },
   plasma: { label: 'Plasma', create: () => new Plasma(), moduleUrl: MUSIC0, seek: 0 },
+  // Parts #14/#10/#15/#17. Faithful per-part module+seek offsets (cross-correlated from the released
+  // demo, as for techno/rotozoomer) are still TODO — these seeks are placeholder previews.
+  plasmacube: { label: 'Plasmacube', create: () => new Plasmacube(), moduleUrl: MUSIC0, seek: 0 },
+  ddstars: { label: 'Desert Dream stars', create: () => new DDStars(), moduleUrl: MUSIC0, seek: 0 },
+  minivectorballs: {
+    label: 'MiniVectorBalls',
+    create: () => new MiniVectorBalls(),
+    moduleUrl: MUSIC0,
+    seek: 0,
+  },
+  comanche: { label: '3D sinus field', create: () => new Comanche(), moduleUrl: MUSIC0, seek: 0 },
 };
 
 export const DEFAULT_EFFECT = 'techno';
