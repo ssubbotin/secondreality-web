@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cos16, sin16 } from './mathsin.js';
+import { sin16 } from './mathsin.js';
 import { calcMatrixYXZ } from './matrix.js';
 
 // Element layout (word offsets / 2): m[0..8] = the 3x3 row-major matrix MATH.ASM stores at ds:[di+0..16].

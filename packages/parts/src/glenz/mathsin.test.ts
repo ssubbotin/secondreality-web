@@ -1,6 +1,26 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseDw } from './__fixtures__/parse.js';
 import { cos16, DEG, sin16 } from './mathsin.js';
+
+// Tests run in vitest's node environment and are excluded from tsc, so node:fs/node:url are fine here.
+function parseDw(name: string): number[] {
+  const text = readFileSync(
+    fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)),
+    'utf8',
+  );
+  const out: number[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const m = line.match(/^\s*dw\s+(.+)$/i);
+    if (!m) continue;
+    for (const tok of (m[1] ?? '').split(',')) {
+      const t = tok.trim();
+      if (t.length > 0) out.push(Number.parseInt(t, 10));
+    }
+  }
+  return out;
+}
 
 // MATHSIN.INC ships `sintable16` (the rising quarter: 900 words) immediately followed by `costable16`
 // (a full-period cosine: 3600 words). Concatenated, the parseDw stream is [sin-quarter(900), cos(3600)].

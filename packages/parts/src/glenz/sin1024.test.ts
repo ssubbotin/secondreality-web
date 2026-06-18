@@ -1,6 +1,27 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { parseDw } from './__fixtures__/parse.js';
 import { sin1024, sinAt } from './sin1024.js';
+
+// Tests run in vitest's node environment and are excluded from tsc (parts tsconfig excludes *.test.ts),
+// so node:fs/node:url are fine here without @types/node.
+function parseDw(name: string): number[] {
+  const text = readFileSync(
+    fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)),
+    'utf8',
+  );
+  const out: number[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const m = line.match(/^\s*dw\s+(.+)$/i);
+    if (!m) continue;
+    for (const tok of (m[1] ?? '').split(',')) {
+      const t = tok.trim();
+      if (t.length > 0) out.push(Number.parseInt(t, 10));
+    }
+  }
+  return out;
+}
 
 describe('sin1024 — verbatim port of GLENZ/SIN1024.INC', () => {
   it('reproduces SIN1024.INC byte-for-byte (1024 signed words, amplitude 256)', () => {

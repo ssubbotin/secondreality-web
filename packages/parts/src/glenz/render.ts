@@ -2,7 +2,14 @@ import type { Solid } from './geometry.js';
 import type { GlenzPolygon } from './glenz-fill.js';
 import { calcMatrixYXZ } from './matrix.js';
 import { faceBrightness } from './palette.js';
-import { faceCross, type Point3, PROJ_320, projectPoints, rotatePoints, scaleMatrix } from './vec.js';
+import {
+  faceCross,
+  type Point3,
+  PROJ_320,
+  projectPoints,
+  rotatePoints,
+  scaleMatrix,
+} from './vec.js';
 
 // The per-solid MAIN.C draw pipeline (MAIN.C:595-637): rotate the model points by the rY*rX*rZ matrix
 // (no translation), then apply the diagonal scale matrix with the world translation, project, then build

@@ -46,7 +46,12 @@ describe('rotatePoints — verbatim GLENZ/VEC.ASM:rotlist (M*p>>15 + translate)'
 
 describe('projectPoints — verbatim GLENZ/VEC.ASM:projlist (perspective idiv + clamp)', () => {
   it('projects a centred point to the screen centre', () => {
-    const p: Point3 = projectPoints(pts(0, 0, 1500), PROJ_320)[0] ?? { sx: 0, sy: 0, z: 0, flags: 0 };
+    const p: Point3 = projectPoints(pts(0, 0, 1500), PROJ_320)[0] ?? {
+      sx: 0,
+      sy: 0,
+      z: 0,
+      flags: 0,
+    };
     expect(p.sx).toBe(160); // projxadd
     expect(p.sy).toBe(130); // projyadd
   });
@@ -65,7 +70,12 @@ describe('projectPoints — verbatim GLENZ/VEC.ASM:projlist (perspective idiv + 
   });
 
   it('clamps z to projminz (128) for near points', () => {
-    const p: Point3 = projectPoints(pts(100, 0, 10), PROJ_320)[0] ?? { sx: 0, sy: 0, z: 0, flags: 0 };
+    const p: Point3 = projectPoints(pts(100, 0, 10), PROJ_320)[0] ?? {
+      sx: 0,
+      sy: 0,
+      z: 0,
+      flags: 0,
+    };
     // divided by 128 not 10; z stored is the original 10.
     expect(p.sx).toBe(Math.trunc((100 * 256) / 128) + 160);
     expect(p.z).toBe(10);
@@ -76,20 +86,12 @@ describe('projectPoints — verbatim GLENZ/VEC.ASM:projlist (perspective idiv + 
 describe('faceCross — verbatim GLENZ/VEC.ASM:checkhiddenbx (signed 2D cross = facing + brightness)', () => {
   it('CCW screen triangle is front-facing (cross >= 0)', () => {
     // v0=(0,0) v1=(10,0) v2=(0,10): (x0-x1)(y0-y2)-(y0-y1)(x0-x2) = (-10)(-10)-(0)(-... )
-    const { hidden } = faceCross(
-      { sx: 0, sy: 0 },
-      { sx: 10, sy: 0 },
-      { sx: 0, sy: 10 },
-    );
+    const { hidden } = faceCross({ sx: 0, sy: 0 }, { sx: 10, sy: 0 }, { sx: 0, sy: 10 });
     expect(hidden).toBe(false);
   });
 
   it('CW screen triangle is back-facing (hidden)', () => {
-    const { hidden } = faceCross(
-      { sx: 0, sy: 0 },
-      { sx: 0, sy: 10 },
-      { sx: 10, sy: 0 },
-    );
+    const { hidden } = faceCross({ sx: 0, sy: 0 }, { sx: 0, sy: 10 }, { sx: 10, sy: 0 });
     expect(hidden).toBe(true);
   });
 

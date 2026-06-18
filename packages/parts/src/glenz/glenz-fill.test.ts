@@ -60,9 +60,7 @@ describe('GlenzFill — additive XOR-run-list fill (GLENZ/NEW.ASM ng_pass2/ng_pa
     const fill = new GlenzFill();
     const bg = new Uint8Array(SCREEN_W * SCREEN_H);
     const out = new Uint8Array(SCREEN_W * SCREEN_H);
-    expect(() =>
-      fill.render(out, bg, [square(-50, -50, 400, 400, 0x08)]),
-    ).not.toThrow();
+    expect(() => fill.render(out, bg, [square(-50, -50, 400, 400, 0x08)])).not.toThrow();
     expect(px(out, 160, 100)).toBe(0x08); // centre filled
   });
 });
