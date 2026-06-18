@@ -1,12 +1,12 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
-import { DotCloud, RasterSurface } from './nodes.js';
+import { RasterSurface } from './nodes.js';
 import { buildTunnelPalette } from './palette.js';
 import { rasterTunnel, SCREEN_H, SCREEN_W } from './raster.js';
 import { buildCircleTable, buildCosit, buildSade, buildSinit } from './tables.js';
 import { createTunnelState, stepTunnel, type TunnelState, VEKE } from './tunnel-sim.js';
 
-/** authentic = chunky 320×200 nearest upscale; modern = GPU glowing dots (default). */
+/** authentic = chunky 320×200 nearest upscale; modern = smooth LinearFilter upscale (default). */
 export type LookMode = 'authentic' | 'modern';
 
 const SIM_HZ = 70; // original mode-X frame cadence; the sim is fps-independent via the accumulator
@@ -25,7 +25,6 @@ export class DotTunnel implements Effect {
   private state: TunnelState = createTunnelState();
   private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
   private surface: RasterSurface | null = null;
-  private cloud: DotCloud | null = null;
   private acc = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
@@ -35,7 +34,6 @@ export class DotTunnel implements Effect {
   init(ctx: DemoContext): void {
     this.ctx = ctx;
     this.surface = new RasterSurface(this.palette);
-    this.cloud = new DotCloud(this.palette, this.circle, this.sade);
     this.state = createTunnelState();
     this.acc = 0;
     this.applyMode();
@@ -59,19 +57,18 @@ export class DotTunnel implements Effect {
       stepTunnel(this.state, this.sinit, this.cosit);
       if (this.state.frame >= VEKE) this.state = createTunnelState(); // self-loop in the lab
     }
-    if (this.mode === 'authentic') {
-      rasterTunnel(this.index, this.state, this.circle, this.sade);
-      this.surface?.update(this.index);
-    } else {
-      this.cloud?.update(this.state);
-    }
+    // Both modes render the CPU rasteriser; the look toggles via the upscale filter (authentic =
+    // chunky NearestFilter, modern = smooth LinearFilter). A GPU instanced-dot renderer (DotCloud,
+    // parked in nodes.ts) draws nothing on the WebGL2 node backend — three's instanced-geometry path
+    // doesn't deliver the per-instance data there — so modern uses the proven cross-backend raster path.
+    rasterTunnel(this.index, this.state, this.circle, this.sade);
+    this.surface?.update(this.index);
   }
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    if (!renderer) return;
-    if (this.mode === 'authentic') this.surface?.render(renderer, target.gpu);
-    else this.cloud?.render(renderer, target.gpu);
+    if (!renderer || !this.surface) return;
+    this.surface.render(renderer, target.gpu);
   }
 
   resize(_width: number, _height: number): void {
@@ -81,8 +78,6 @@ export class DotTunnel implements Effect {
   dispose(): void {
     this.surface?.dispose();
     this.surface = null;
-    this.cloud?.dispose();
-    this.cloud = null;
     this.ctx = null;
   }
 }
