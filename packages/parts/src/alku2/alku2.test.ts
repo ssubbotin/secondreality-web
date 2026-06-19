@@ -5,6 +5,7 @@ import { buildCardBuffers } from './alku2.js';
 import { composeFrame } from './compose.js';
 import { SCREEN_H, SCREEN_W } from './copper.js';
 import { decodeU, loadFona } from './font.js';
+import { decodeHoi } from './hoi.js';
 import { buildAlku2Palette } from './palette.js';
 import { CREDIT_CARDS } from './scroll.js';
 
@@ -36,7 +37,7 @@ describe('buildCardBuffers', () => {
 describe('frame composition (integration)', () => {
   it('produces lit text indices over the HOI backdrop when a card is on-screen', () => {
     const font = loadFona(decodeU(fixture('FONA.UH')));
-    const hoiDecoded = decodeU(fixture('HOI.U'));
+    const hoiDecoded = decodeHoi(fixture('HOI.U'));
     const palette = buildAlku2Palette(hoiDecoded.palette);
     const bufs = buildCardBuffers(font);
     const card0 = bufs[0];
@@ -60,7 +61,7 @@ describe('frame composition (integration)', () => {
 
   it('is deterministic: the same frame composes identically', () => {
     const font = loadFona(decodeU(fixture('FONA.UH')));
-    const hoi = decodeU(fixture('HOI.U')).indices;
+    const hoi = decodeHoi(fixture('HOI.U')).indices;
     const buf = buildCardBuffers(font)[1];
     expect(buf).toBeDefined();
     if (!buf) return;
@@ -76,7 +77,7 @@ describe('frame composition (integration)', () => {
     // (the effect's mapping at the window midpoint), textOriginX = 0, so tbuf column 160 lands at screen
     // x≈160 — the card reads centred. Assert the lit span straddles the screen centre.
     const font = loadFona(decodeU(fixture('FONA.UH')));
-    const hoi = decodeU(fixture('HOI.U')).indices;
+    const hoi = decodeHoi(fixture('HOI.U')).indices;
     const buf = buildCardBuffers(font)[0];
     expect(buf).toBeDefined();
     if (!buf) return;

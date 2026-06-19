@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { CARDS, FADE_STEPS, HOLD_FRAMES, revealAt, TIMELINE_FRAMES } from './reveal.js';
 
 describe('opening reveal timeline', () => {
-  it('declares the three opening cards from MAIN.C:61-76', () => {
+  it('declares the two presentation cards from MAIN.C:61-69 (the title card is part #3)', () => {
     expect(CARDS.map((c) => c.lines)).toEqual([
       ['A', 'Future Crew', 'Production'],
       ['First Presented', 'at Assembly 93'],
-      ['in', 'ä', 'ö'],
     ]);
   });
 
@@ -27,11 +26,12 @@ describe('opening reveal timeline', () => {
     expect(revealAt(outStart + FADE_STEPS - 1)).toEqual({ card: 0, level: 1 });
   });
 
-  it('advances to the next card after the previous fully fades out', () => {
+  it('advances to the next card after the previous fully fades out, then loops', () => {
     const cardSpan = FADE_STEPS + HOLD_FRAMES + FADE_STEPS;
     expect(revealAt(cardSpan).card).toBe(1);
     expect(revealAt(cardSpan + 32)).toEqual({ card: 1, level: 32 });
-    expect(revealAt(2 * cardSpan).card).toBe(2);
+    // Only two cards: the timeline loops back to card 0 after the second fades out.
+    expect(revealAt(2 * cardSpan).card).toBe(0);
   });
 
   it('loops the timeline (self-loop in the lab)', () => {

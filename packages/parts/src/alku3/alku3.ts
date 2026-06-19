@@ -1,54 +1,72 @@
-import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
+import type {
+  BitmapFont,
+  DemoContext,
+  Effect,
+  FrameContext,
+  LoadContext,
+  RenderTarget,
+} from '@sr/engine';
+import { decodeU } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
-import { closingFadeStep, revealStep } from './fade.js';
-import { type DecodedPicture, loadRevealPicture, REVEAL_PICTURES } from './lbm.js';
-import { flashAt } from './reveal.js';
-import { PictureRevealSurface } from './surface.js';
+import { SCREEN_H, SCREEN_W } from './backdrop.js';
+import { decodeHoi } from './hoi.js';
+import { buildAlkuPalette, lerpPalette } from './palette.js';
+import { revealAt } from './reveal.js';
+import { RasterSurface } from './surface.js';
+import { composeTitle, loadTitleFont } from './title.js';
 
-/** authentic = chunky nearest upscale; modern = smooth LinearFilter upscale (default). */
+/** authentic = chunky 320×200 nearest upscale; modern = smooth LinearFilter upscale (default). */
 export type LookMode = 'authentic' | 'modern';
 
 /** The original opening field is locked to the ~70 Hz vblank (frame_count); we drive the same cadence. */
 const SIM_HZ = 70;
 const SIM_DT = 1 / SIM_HZ;
 
-const BLACK = new Uint8Array(256 * 3);
+/** Decoded assets resolved by load(), held until init() builds the surface. */
+interface Alku3Assets {
+  font: BitmapFont;
+  /** HOI horizon picture indices (640×200). */
+  hoi: Uint8Array;
+  /** The lit picture+text palette (`palette2`) the dofade cross-fades up to. */
+  palette2: Uint8Array;
+}
 
 /**
- * Part #3 "Opening texts III" — the final reveal (ALKU). Ports the `sync 4` picture-reveal palette fade
- * (`ALKU/MAIN.C:79-86`, `cop_fadepal = picin; cop_dofade = 128`) and the closing `dofade`
- * (`MAIN.C:147-149`): the picture flashes in from black over a 128-step incremental palette fade
- * (`COPPER.ASM:115-145`), holds, then fades back to black. The four shipped ALKU reveal pictures —
- * PIC001 / HOIKKA / RYPPIS / U2-MOVIE — are cycled through this exact fade.
- *
- * A fixed-timestep accumulator at `SIM_HZ = 70` keeps the reveal cadence display-fps-independent
- * (128/70 ≈ 1.83 s, matching the original). The fade lives entirely in the palette; the index buffer per
- * picture is uploaded once when that picture becomes active. authentic = NearestFilter chunky upscale;
- * modern = LinearFilter smooth (default).
+ * Part #3 "Opening texts III" — the title reveal (ALKU). Ports the third presentation card
+ * (`dis_sync<3`, `ALKU/MAIN.C:71-77`): "in" plus the two-glyph SECOND REALITY title, rendered over the
+ * **HOI horizon picture** with the picture's own palette. The whole frame cross-fades black → the lit
+ * picture+title palette (`palette2`) → black via `dofade` (`MAIN.C:74`). A fixed 70 Hz accumulator keeps
+ * the cadence display-fps-independent.
  */
 export class Alku3 implements Effect {
   readonly id = 'alku3';
 
   private ctx: DemoContext | null = null;
   private mode: LookMode = 'modern';
-  private readonly pictures: (DecodedPicture | null)[] = REVEAL_PICTURES.map(() => null);
-  private surface: PictureRevealSurface | null = null;
-  /** Index of the picture the current surface was built for (so we rebuild only on a change). */
-  private activeIndex = -1;
+  private assets: Alku3Assets | null = null;
+  private surface: RasterSurface | null = null;
+  private readonly blackPalette = new Uint8Array(256 * 3);
+  private readonly livePalette = new Uint8Array(256 * 3);
+  private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
   private frame = 0;
   private acc = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
-    const decoded = await Promise.all(REVEAL_PICTURES.map((name) => loadRevealPicture(name)));
-    for (let i = 0; i < decoded.length; i++) this.pictures[i] = decoded[i] ?? null;
+    const [fona, hoi] = await Promise.all([fetchU('/pics/FONA.UH'), fetchHoi('/pics/HOI.U')]);
+    this.assets = {
+      font: loadTitleFont(fona),
+      hoi: hoi.indices,
+      palette2: buildAlkuPalette(hoi.palette),
+    };
   }
 
   init(ctx: DemoContext): void {
     this.ctx = ctx;
+    if (!this.assets) throw new Error('Alku3.init called before load resolved');
+    this.surface = new RasterSurface(this.livePalette);
     this.frame = 0;
     this.acc = 0;
-    this.activeIndex = -1;
-    this.surface = null;
+    this.applyMode();
     this.composeInto(0);
   }
 
@@ -72,34 +90,19 @@ export class Alku3 implements Effect {
     this.composeInto(this.frame);
   }
 
-  /** Select the active picture for sim-frame `f`, (re)build its surface, and push the live fade palette. */
+  /** Build the live palette + index buffer for sim-frame `f` and push them to the surface. */
   private composeInto(f: number): void {
-    const state = flashAt(f);
-    const pic = this.pictures[state.pictureIndex];
-    if (!pic) return;
+    const assets = this.assets;
+    if (!assets || !this.surface) return;
+    const reveal = revealAt(f);
 
-    if (state.pictureIndex !== this.activeIndex) {
-      this.surface?.dispose();
-      this.surface = new PictureRevealSurface(pic.width, pic.height, pic.indices);
-      this.activeIndex = state.pictureIndex;
-      this.applyMode();
-    }
-    const surface = this.surface;
-    if (!surface) return;
+    // dofade: the whole frame fades black → palette2 → black by `level/64` (MAIN.C:74).
+    this.livePalette.set(lerpPalette(this.blackPalette, assets.palette2, reveal.level));
+    this.surface.setPalette(this.livePalette);
 
-    // The live 6-bit palette for this phase:
-    //   reveal — the 128-step incremental fade black -> the picture palette
-    //   hold   — the full picture palette
-    //   close  — the 64-step dofade from the picture palette -> black
-    let palette6: Uint8Array;
-    if (state.phase === 'reveal') {
-      palette6 = revealStep(state.revealStep, pic.palette6);
-    } else if (state.phase === 'close') {
-      palette6 = closingFadeStep(state.closeStep, pic.palette6, BLACK);
-    } else {
-      palette6 = pic.palette6;
-    }
-    surface.setPalette6(palette6);
+    // The HOI horizon holds still under the title card.
+    composeTitle(this.index, assets.font, assets.hoi, 0);
+    this.surface.update(this.index);
   }
 
   render(_frame: FrameContext, target: RenderTarget): void {
@@ -109,14 +112,27 @@ export class Alku3 implements Effect {
   }
 
   resize(_width: number, _height: number): void {
-    // Each decoded picture is a fixed-size field; the host blit upscales it to whatever target it is given.
+    // The 320×200 field is fixed; the host blit upscales it to whatever target it is given.
   }
 
   dispose(): void {
     this.surface?.dispose();
     this.surface = null;
     this.ctx = null;
-    this.activeIndex = -1;
-    for (let i = 0; i < this.pictures.length; i++) this.pictures[i] = null;
+    this.assets = null;
   }
+}
+
+/** Fetch a `.U`/`.UH` asset and decode it through the engine glyph-sheet decoder. */
+async function fetchU(url: string): Promise<ReturnType<typeof decodeU>> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`alku3: failed to load ${url} (${res.status})`);
+  return decodeU(await res.arrayBuffer());
+}
+
+/** Fetch the HOI horizon picture and decode it via the `hzpic` read path (palette@16, pixels@add*16). */
+async function fetchHoi(url: string): Promise<ReturnType<typeof decodeHoi>> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`alku3: failed to load ${url} (${res.status})`);
+  return decodeHoi(await res.arrayBuffer());
 }

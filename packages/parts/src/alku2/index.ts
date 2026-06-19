@@ -17,6 +17,7 @@ export {
   type Glyph,
   loadFona,
 } from './font.js';
+export { type DecodedHoi, decodeHoi } from './hoi.js';
 export { buildAlku2Palette } from './palette.js';
 export {
   CREDIT_CARDS,

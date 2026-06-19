@@ -9,9 +9,10 @@ import type {
 import { decodeU, loadFona } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
 import { composeFrame } from './compose.js';
-import { copperBandColors, SCREEN_H, SCREEN_W } from './copper.js';
+import { SCREEN_H, SCREEN_W } from './copper.js';
+import { decodeHoi } from './hoi.js';
 import { RasterSurface } from './nodes.js';
-import { buildAlkuPalette, COPPER_BASE, lerpPalette, TEXT_BASE } from './palette.js';
+import { buildAlkuPalette, lerpPalette } from './palette.js';
 import { revealAt } from './reveal.js';
 
 /** authentic = chunky 320×200 nearest upscale; modern = smooth LinearFilter upscale (default). */
@@ -21,34 +22,50 @@ export type LookMode = 'authentic' | 'modern';
 const SIM_HZ = 70;
 const SIM_DT = 1 / SIM_HZ;
 
-/** Part #1 "Opening texts I" (ALKU): the presentation-card reveals over a copper backdrop. */
+/** Decoded assets resolved by load(), held until init() builds the surface. */
+interface Alku1Assets {
+  font: BitmapFont;
+  /** HOI horizon picture indices (640×200). */
+  hoi: Uint8Array;
+  /** The lit picture+text palette (`palette2`) the dofade cross-fades up to. */
+  palette2: Uint8Array;
+}
+
+/**
+ * Part #1 "Opening texts I" (ALKU): the presentation cards "A / Future Crew / Production" and
+ * "First Presented / at Assembly 93" (`ALKU/MAIN.C:61-69`), rendered over the **HOI horizon picture**
+ * (`hzpic`) with the picture's own palette. Each card stamps its plane-byte text into the field and the
+ * whole palette cross-fades black → the lit picture+text palette (`palette2`) → black (`dofade`,
+ * `MAIN.C:64`). A fixed 70 Hz accumulator keeps the cadence display-fps-independent.
+ */
 export class Alku1 implements Effect {
   readonly id = 'alku1';
 
   private ctx: DemoContext | null = null;
   private mode: LookMode = 'modern';
+  private assets: Alku1Assets | null = null;
   private surface: RasterSurface | null = null;
-  private font: BitmapFont | null = null;
-  /** The "lit" palette (text ramp at full brightness) and the all-black palette for the dofade ends. */
-  private readonly basePalette = buildAlkuPalette();
+  /** The all-black palette for the dofade ends. */
   private readonly blackPalette = new Uint8Array(256 * 3);
-  /** The per-frame palette uploaded to the LUT (copper band + faded text band). */
+  /** The per-frame palette uploaded to the LUT (palette2 faded by the current dofade level). */
   private readonly livePalette = new Uint8Array(256 * 3);
   private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
   private frame = 0;
   private acc = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
-    // FONA.UH is the glyph sheet; HOI.U is loaded for availability (the picture backdrop is a modern
-    // upgrade gated by the deferred scroller half). Both decode through the engine's .U decoder.
-    const fona = await fetchU('/pics/FONA.UH');
-    this.font = loadFona(fona);
-    // HOI is fetched to validate the pipeline; not yet drawn (see STATUS — deferred copper-scroll).
-    await fetchU('/pics/HOI.U').catch(() => undefined);
+    // FONA.UH is the glyph sheet; HOI.U is the horizon picture the cards sit on.
+    const [fona, hoi] = await Promise.all([fetchU('/pics/FONA.UH'), fetchHoi('/pics/HOI.U')]);
+    this.assets = {
+      font: loadFona(fona),
+      hoi: hoi.indices,
+      palette2: buildAlkuPalette(hoi.palette),
+    };
   }
 
   init(ctx: DemoContext): void {
     this.ctx = ctx;
+    if (!this.assets) throw new Error('Alku1.init called before load resolved');
     this.surface = new RasterSurface(this.livePalette);
     this.frame = 0;
     this.acc = 0;
@@ -78,22 +95,17 @@ export class Alku1 implements Effect {
 
   /** Build the live palette + index buffer for sim-frame `f` and push them to the surface. */
   private composeInto(f: number): void {
-    if (!this.font || !this.surface) return;
+    const assets = this.assets;
+    if (!assets || !this.surface) return;
     const reveal = revealAt(f);
 
-    // Start from the base palette, then animate the copper band and fade the text ramp via dofade.
-    this.livePalette.set(this.basePalette);
-    const copper = copperBandColors(f);
-    this.livePalette.set(copper, COPPER_BASE * 3);
-
-    // dofade: cross-fade the text band black→lit by `level/64`. Only the 4-entry text band needs it.
-    const litBand = this.basePalette.subarray(TEXT_BASE * 3, (TEXT_BASE + 4) * 3);
-    const blackBand = this.blackPalette.subarray(0, 4 * 3);
-    const faded = lerpPalette(blackBand, litBand, reveal.level);
-    this.livePalette.set(faded, TEXT_BASE * 3);
-
+    // dofade: the whole frame fades black → palette2 → black by `level/64` (MAIN.C:64). At level 0 the
+    // picture+text reads black; at level 64 the full lit palette is shown.
+    this.livePalette.set(lerpPalette(this.blackPalette, assets.palette2, reveal.level));
     this.surface.setPalette(this.livePalette);
-    composeFrame(this.index, this.font, reveal, f);
+
+    // The HOI horizon holds roughly still under the cards; we keep the pan at 0 for the static card phase.
+    composeFrame(this.index, assets.font, assets.hoi, reveal, 0);
     this.surface.update(this.index);
   }
 
@@ -111,13 +123,20 @@ export class Alku1 implements Effect {
     this.surface?.dispose();
     this.surface = null;
     this.ctx = null;
-    this.font = null;
+    this.assets = null;
   }
 }
 
-/** Fetch a `.U`/`.UH` asset and decode it through the engine decoder. */
+/** Fetch a `.U`/`.UH` asset and decode it through the engine glyph-sheet decoder. */
 async function fetchU(url: string): Promise<ReturnType<typeof decodeU>> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`alku1: failed to load ${url} (${res.status})`);
   return decodeU(await res.arrayBuffer());
+}
+
+/** Fetch the HOI horizon picture and decode it via the `hzpic` read path (palette@16, pixels@add*16). */
+async function fetchHoi(url: string): Promise<ReturnType<typeof decodeHoi>> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`alku1: failed to load ${url} (${res.status})`);
+  return decodeHoi(await res.arrayBuffer());
 }
