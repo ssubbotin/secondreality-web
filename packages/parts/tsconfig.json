@@ -3,5 +3,5 @@
   "compilerOptions": { "outDir": "dist", "rootDir": "src" },
   "references": [{ "path": "../engine" }],
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts"]
+  "exclude": ["src/**/*.test.ts", "src/vector2/bake.ts"]
 }

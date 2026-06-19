@@ -3,7 +3,12 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!packages/engine/src/audio/libopenmpt.glue.js"]
+    "includes": [
+      "**",
+      "!packages/engine/src/audio/libopenmpt.glue.js",
+      "!apps/lab/public/models",
+      "!packages/parts/src/vector2/__fixtures__/vector2-model.json"
+    ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
