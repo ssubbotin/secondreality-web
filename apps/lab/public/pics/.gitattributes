@@ -2,3 +2,7 @@
 # fetches the same bytes the original DOS code read.
 ENDSCROL.TXT -text
 FONA.UH -text binary
+
+# Vendored DDSTARS overlay art — byte-exact (the runtime fetches the same bytes linked into _textpic).
+TEXTS.16 -text binary
+TEXTS.LBM -text binary
