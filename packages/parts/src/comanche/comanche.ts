@@ -1,11 +1,15 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
+import { type CombgBackdrop, decodeCombg } from './combg.js';
 import { COMAN_FRAMES, createFieldState, type FieldState, stepField } from './field-sim.js';
 import { RasterSurface } from './nodes.js';
 import { buildComanchePalette } from './palette.js';
 import { buildHeightOffset, FIELD_H, FIELD_W, rasterField } from './raster.js';
 import { buildSin1024, buildWave2, buildZwave, WAVESIN } from './tables.js';
 import { decodeW1dta } from './w1dta.js';
+
+/** The COMBG sky backdrop picture (drawn behind the terrain). */
+const COMBG_URL = '/pics/COMBG.LBM';
 
 /** authentic = chunky 160×200 nearest upscale; modern = smooth LinearFilter upscale (default). */
 export type LookMode = 'authentic' | 'modern';
@@ -20,8 +24,9 @@ const SIM_DT = 1 / SIM_HZ;
  * via the upscale filter (authentic = chunky NearestFilter matching the original mode-X pixel-doubling,
  * modern = smooth LinearFilter). A GPU heightfield raymarch is parked for the shared post chain — the
  * raster path renders identically across the WebGPU/WebGL2 backends, which the dot-tunnel port proved is
- * the dependable cross-backend route. The COMBG.LBM background picture is deferred (the background stays
- * the cleared sky / palette 0) until the image pipeline lands.
+ * the dependable cross-backend route. The COMBG.LBM sky backdrop is decoded at load (its 240..255 palette
+ * band folds into the comanche palette; its body fills the sky behind the terrain — see `combg.ts`), and
+ * the terrain raster composites on top of it (MAIN.C + ASM.ASM `_docopy`).
  */
 export class Comanche implements Effect {
   readonly id = 'comanche';
@@ -29,18 +34,25 @@ export class Comanche implements Effect {
   private ctx: DemoContext | null = null;
   private mode: LookMode = 'modern';
   private readonly sin1024 = buildSin1024();
-  private readonly palette = buildComanchePalette();
+  private palette = buildComanchePalette();
   private readonly heightX = decodeW1dta();
   private readonly heightY = buildWave2(WAVESIN);
   private readonly off = buildHeightOffset(buildZwave());
   private state: FieldState = createFieldState();
   private readonly index = new Uint8Array(FIELD_W * FIELD_H);
   private surface: RasterSurface | null = null;
+  private backdrop: CombgBackdrop | null = null;
   private acc = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
-    // No external assets — the heightfields are embedded/regenerated in code. (The COMBG.LBM background
-    // is deferred to the future image pipeline.)
+    // The COMBG.LBM sky backdrop: its high palette band (colour indices 240..255) is folded into the
+    // comanche palette and its body is blitted behind the terrain (MAIN.C + ASM.ASM _docopy). The
+    // heightfields stay embedded/regenerated in code.
+    const res = await fetch(COMBG_URL);
+    if (!res.ok) throw new Error(`Comanche.load: failed to fetch ${COMBG_URL} (${res.status})`);
+    const backdrop = decodeCombg(await res.arrayBuffer());
+    this.backdrop = backdrop;
+    this.palette = buildComanchePalette(backdrop.paletteBand);
   }
 
   init(ctx: DemoContext): void {
@@ -69,7 +81,7 @@ export class Comanche implements Effect {
       stepField(this.state, this.sin1024);
       if (this.state.frame >= COMAN_FRAMES) this.state = createFieldState(); // self-loop in the lab
     }
-    rasterField(this.index, this.state, this.heightX, this.heightY, this.off);
+    rasterField(this.index, this.state, this.heightX, this.heightY, this.off, this.backdrop?.body);
     this.surface?.update(this.index);
   }
 
