@@ -1,44 +1,58 @@
-import { COPPER_BASE, COPPER_LEN } from './palette.js';
+/**
+ * The HOI horizon backdrop for the ALKU presentation cards, ported from `ALKU/MAIN.C` + `COPPER.ASM`.
+ *
+ * The opening text cards sit over the **HOI horizon picture** (`hzpic`), not a synthetic rainbow. `init()`
+ * draws the horizon strip into the field with `outline()` and the copper ISR (`COPPER.ASM copper1`,
+ * lines 64-81) pans it horizontally each frame via `cop_start = a/4 (+ p*88)` (the CRTC display-start byte)
+ * and `cop_scrl = (a&3)*2` (the attribute-controller fine pixel pan). The two combine to a one-pixel-per-step
+ * left pan of the 640-wide source. The card phase holds the picture roughly still while the text fades
+ * in/out via `dofade`; we render the *visible* result — a 320-pixel window sampled from the 640-wide HOI
+ * source, wrapping over the source width.
+ */
 
 /** The original mode-X opening field is 320×200. */
 export const SCREEN_W = 320;
 export const SCREEN_H = 200;
 
+/** The HOI picture source is 640 wide (`HOI.U` header) — a 320-px slack for the copper pan. */
+export const HOI_W = 640;
+export const HOI_H = 200;
+
 /**
- * The copper backdrop the opening cards sit on. The original ALKU scrolls the HOI picture behind the text
- * with a per-scanline copper (`COPPER.ASM` rewriting the CRTC start + palette per line); that picture
- * scroller is the deferred credit-roll half. For part #1 we render the classic **copper-bar** look: a band
- * of saturated hues mapped across the scanlines, scrolling vertically with the frame. Two pure pieces:
- *
- *  - `copperRowIndex(y, frame)` → the palette index (within the copper band) for scanline `y`.
- *  - `copperBandColors(frame)` → the COPPER_LEN animated 6-bit RGB triples for the band.
+ * The pixel offset into the 640-wide HOI source for copper scroll step `a`. `cop_start = a/4` and
+ * `cop_scrl = (a&3)*2` reassemble to a left pan of exactly `a` pixels; we wrap it over the source width so
+ * the backdrop loops seamlessly.
  */
-
-/** Map a scanline to a copper-band palette index, scrolling with `frame`. */
-export function copperRowIndex(y: number, frame: number): number {
-  // A triangle ramp over the band, offset by the frame so the bars drift down the screen.
-  const phase = (y + frame) % COPPER_LEN;
-  const tri = phase < COPPER_LEN / 2 ? phase : COPPER_LEN - 1 - phase;
-  return COPPER_BASE + (((tri * 2) % COPPER_LEN) | 0);
-}
-
-/** 6-bit sine helper in 0..63. */
-function sin6(t: number): number {
-  return Math.round((Math.sin(t) * 0.5 + 0.5) * 63);
+export function backdropOffset(scroll: number): number {
+  return ((scroll % HOI_W) + HOI_W) % HOI_W;
 }
 
 /**
- * The animated copper-band colours: COPPER_LEN RGB triples cycling through saturated hues, with a slow
- * per-frame drift so the backdrop breathes. Returned as flat 6-bit RGB to splice into the palette.
+ * Sample one 320-pixel backdrop scanline from the 640-wide HOI source row `y`, starting at pixel `offset`
+ * and wrapping over the source width. Writes the 320 palette indices into `dstRow` (length ≥ SCREEN_W).
  */
-export function copperBandColors(frame: number): Uint8Array {
-  const out = new Uint8Array(COPPER_LEN * 3);
-  const drift = frame * 0.05;
-  for (let i = 0; i < COPPER_LEN; i++) {
-    const a = (i / COPPER_LEN) * Math.PI * 2;
-    out[i * 3] = sin6(a + drift);
-    out[i * 3 + 1] = sin6(a + drift + 2.094); // +120°
-    out[i * 3 + 2] = sin6(a + drift + 4.188); // +240°
+export function sampleBackdropRow(
+  dstRow: Uint8Array,
+  hoi: Uint8Array,
+  y: number,
+  offset: number,
+): void {
+  const srcBase = y * HOI_W;
+  for (let x = 0; x < SCREEN_W; x++) {
+    const sx = (offset + x) % HOI_W;
+    dstRow[x] = hoi[srcBase + sx] ?? 0;
   }
-  return out;
+}
+
+/**
+ * Lay the HOI backdrop window across every scanline of `dst` (320×200), starting at pixel `offset` into the
+ * 640-wide source and wrapping. `dst` is overwritten (no accumulation between frames).
+ */
+export function composeBackdrop(dst: Uint8Array, hoi: Uint8Array, offset: number): void {
+  const off = backdropOffset(offset);
+  const row = new Uint8Array(SCREEN_W);
+  for (let y = 0; y < SCREEN_H; y++) {
+    sampleBackdropRow(row, hoi, y, off);
+    dst.set(row, y * SCREEN_W);
+  }
 }

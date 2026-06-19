@@ -1,11 +1,16 @@
 /**
- * The opening reveal timeline — the deterministic port of the three presentation cards at the head of
- * ALKU (`MAIN.C:61-76`). Each card runs `prtc` of its lines, then `dofade(black→text)` (64 steps),
- * `wait(300)`, `dofade(text→black)` (64 steps). The original gates the start of each card on `dis_sync`
- * (the music order/row); here the cards run back-to-back on the fixed-timestep accumulator so the cadence
- * is reproducible and fps-independent, and the whole timeline self-loops in the lab.
+ * The opening reveal timeline — the deterministic port of the presentation cards at the head of ALKU
+ * (`MAIN.C:61-71`). Part #1 covers the first two `dis_sync` cards: the "A / Future Crew / Production"
+ * card (`dis_sync<1`, `MAIN.C:61-64`) and the "First Presented / at Assembly 93" card (`dis_sync<2`,
+ * `MAIN.C:66-69`). The third card — "in" + the two-glyph SECOND REALITY title (`dis_sync<3`,
+ * `MAIN.C:71-77`) — is the reveal handled by part #3 (alku3).
  *
- * `level` is the 0..64 fade position (0 = black, 64 = full text), fed straight into `lerpPalette`.
+ * Each card runs `prtc` of its lines, then `dofade(black→text)` (64 steps), `wait(300)`,
+ * `dofade(text→black)` (64 steps). The original gates the start of each card on `dis_sync` (the music
+ * order/row); here the cards run back-to-back on the fixed-timestep accumulator so the cadence is
+ * reproducible and fps-independent, and the whole timeline self-loops in the lab.
+ *
+ * `level` is the 0..64 fade position (0 = black, 64 = full picture+text), fed straight into `lerpPalette`.
  */
 
 /** dofade is a 64-step linear cross-fade (MAIN.C:306). */
@@ -22,13 +27,12 @@ export interface Card {
 }
 
 /**
- * The three opening cards (MAIN.C:61-76). Line y's are the original screen coordinates. Card 3's "ä"/"ö"
- * are the Finnish "in reality" line drawn as two stacked glyphs.
+ * The two presentation cards part #1 owns (`MAIN.C:61-69`). Line y's are the original `prtc` screen
+ * coordinates. (The third "in / title" card, `MAIN.C:71-77`, is part #3.)
  */
 export const CARDS: Card[] = [
   { lines: ['A', 'Future Crew', 'Production'], ys: [120, 160, 200] },
   { lines: ['First Presented', 'at Assembly 93'], ys: [160, 200] },
-  { lines: ['in', 'ä', 'ö'], ys: [120, 160, 179] },
 ];
 
 /** Frames occupied by one card: fade-in + hold + fade-out. */

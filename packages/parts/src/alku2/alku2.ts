@@ -3,6 +3,7 @@ import { LinearFilter, NearestFilter } from 'three';
 import { composeFrame } from './compose.js';
 import { SCREEN_H, SCREEN_W } from './copper.js';
 import { type BitmapFont, decodeU, loadFona } from './font.js';
+import { decodeHoi } from './hoi.js';
 import { RasterSurface } from './nodes.js';
 import { buildAlku2Palette } from './palette.js';
 import { CREDIT_CARDS, PER_CARD_SCROLL, scrollAt } from './scroll.js';
@@ -31,6 +32,13 @@ async function fetchU(url: string): Promise<ReturnType<typeof decodeU>> {
   return decodeU(await res.arrayBuffer());
 }
 
+/** Fetch the HOI horizon picture and decode it via the `hzpic` read path (palette@16, pixels@add*16). */
+async function fetchHoi(url: string): Promise<ReturnType<typeof decodeHoi>> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`alku2: failed to load ${url} (${res.status})`);
+  return decodeHoi(await res.arrayBuffer());
+}
+
 /**
  * Part #2 — "Opening texts II" (ALKU, the scroller section). Ports `MAIN.C` section 2 (`MAIN.C:79-152`): the
  * HOI picture pans horizontally behind a chunky XOR-plane credit scroller, the four FC credit cards entering
@@ -53,7 +61,7 @@ export class Alku2 implements Effect {
   private dirty = true;
 
   async load(_ctx: LoadContext): Promise<void> {
-    const [fona, hoi] = await Promise.all([fetchU('/pics/FONA.UH'), fetchU('/pics/HOI.U')]);
+    const [fona, hoi] = await Promise.all([fetchU('/pics/FONA.UH'), fetchHoi('/pics/HOI.U')]);
     this.assets = {
       font: loadFona(fona),
       hoi: hoi.indices,

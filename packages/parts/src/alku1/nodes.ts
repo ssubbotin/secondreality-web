@@ -14,8 +14,8 @@ import { SCREEN_H, SCREEN_W } from './copper.js';
  * Maps the 320×200 palette-index buffer through a live 6-bit VGA palette (×4 to 8-bit) into an RGBA
  * DataTexture and blits it to the supplied target. The palette is mutated per frame (the `dofade`
  * cross-fade lives in the palette, not the index buffer), so both the index buffer and the palette can
- * change each frame. The texture is tagged sRGB so the VGA DAC bytes land verbatim; rows are flipped on
- * write because the index buffer is top-row-first while three's uv origin is bottom-left.
+ * change each frame. The texture is tagged sRGB so the VGA DAC bytes land verbatim; rows are written
+ * top-first (DataTexture row 0 → screen top), matching the host blit's orientation.
  */
 export class RasterSurface {
   private readonly rgba = new Uint8Array(SCREEN_W * SCREEN_H * 4);
@@ -43,7 +43,7 @@ export class RasterSurface {
     this.palette = palette;
   }
 
-  /** Resolve the index buffer through the current palette into the RGBA texture (row-flipped). */
+  /** Resolve the index buffer through the current palette into the RGBA texture (top-row-first). */
   update(index: Uint8Array): void {
     const pal = this.palette;
     for (let row = 0; row < SCREEN_H; row++) {

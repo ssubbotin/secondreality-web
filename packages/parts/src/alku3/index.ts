@@ -1,33 +1,21 @@
 export { Alku3, type LookMode } from './alku3.js';
+export { backdropOffset, composeBackdrop, HOI_W, SCREEN_H, SCREEN_W } from './backdrop.js';
+export { type DecodedHoi, decodeHoi } from './hoi.js';
+export { buildAlkuPalette, lerpPalette } from './palette.js';
 export {
-  type Bmhd,
-  byteRun1Decode,
-  type DecodedPicture,
-  decodeLbm,
-  deinterleavePlanes,
-  parseBmhd,
-} from './decode-lbm.js';
-export {
-  CLOSING_STEPS,
-  closingFadeStep,
-  computePicin,
-  REVEAL_STEPS,
-  revealStep,
-} from './fade.js';
-export {
-  loadRevealPicture,
-  REVEAL_PICTURES,
-  type RevealPictureName,
-  revealPictureUrl,
-} from './lbm.js';
-export {
-  CLOSE_FRAMES,
-  type FlashPhase,
-  type FlashState,
-  flashAt,
+  FADE_STEPS,
   HOLD_FRAMES,
-  PICTURE_SPAN,
-  REVEAL_FRAMES,
+  type RevealState,
+  revealAt,
   TIMELINE_FRAMES,
 } from './reveal.js';
-export { PictureRevealSurface } from './surface.js';
+export { RasterSurface } from './surface.js';
+export {
+  composeTitle,
+  FONA_ORDER_TITLE,
+  loadTitleFont,
+  TEXT_BASE,
+  TITLE_GLYPH_1,
+  TITLE_GLYPH_2,
+  TITLE_LINES,
+} from './title.js';

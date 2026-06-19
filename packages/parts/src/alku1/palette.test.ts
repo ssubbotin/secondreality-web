@@ -1,26 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { buildAlkuPalette, lerpPalette, TEXT_BASE } from './palette.js';
 
-describe('buildAlkuPalette', () => {
+/** A 256×3 6-bit source palette where index i has component (i & 63) on all channels. */
+function fakeHoiPalette(): Uint8Array {
+  const p = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const v = i & 63;
+    p[i * 3] = v;
+    p[i * 3 + 1] = v;
+    p[i * 3 + 2] = v;
+  }
+  return p;
+}
+
+describe('buildAlkuPalette (palette2 port, MAIN.C:184-209)', () => {
   it('returns a 256-entry, 6-bit VGA palette', () => {
-    const p = buildAlkuPalette();
+    const p = buildAlkuPalette(fakeHoiPalette());
     expect(p.length).toBe(256 * 3);
     for (const v of p) expect(v).toBeLessThanOrEqual(63);
   });
 
-  it('keeps index 0 black (the background)', () => {
-    const p = buildAlkuPalette();
-    expect([p[0], p[1], p[2]]).toEqual([0, 0, 0]);
+  it('keeps band 0 (indices 0..63) as the verbatim picture colours', () => {
+    const hoi = fakeHoiPalette();
+    const p = buildAlkuPalette(hoi);
+    for (let i = 0; i < 64 * 3; i++) expect(p[i]).toBe(hoi[i]);
   });
 
-  it('places a bright text ramp at TEXT_BASE+1..+3', () => {
-    const p = buildAlkuPalette();
-    // Levels 1/2/3 brighten toward white so the black→text fade reads.
-    const lum = (i: number) => (p[i * 3] ?? 0) + (p[i * 3 + 1] ?? 0) + (p[i * 3 + 2] ?? 0);
-    expect(lum(TEXT_BASE + 1)).toBeGreaterThan(0);
-    expect(lum(TEXT_BASE + 2)).toBeGreaterThan(lum(TEXT_BASE + 1));
-    expect(lum(TEXT_BASE + 3)).toBeGreaterThan(lum(TEXT_BASE + 2));
-    expect(lum(TEXT_BASE + 3)).toBeLessThanOrEqual(63 * 3);
+  it('tints the brightest band more than the dimmest for the same base index', () => {
+    const hoi = fakeHoiPalette();
+    const p = buildAlkuPalette(hoi);
+    const bandBase = (band: number, baseIdx: number) => (band * 64 + baseIdx) * 3;
+    // Picture index 40, band 3 (ink colour 3) tints more than band 1 (ink colour 1).
+    expect(p[bandBase(3, 40)] ?? 0).toBeGreaterThanOrEqual(p[bandBase(1, 40)] ?? 0);
+    expect(TEXT_BASE).toBe(0x40);
   });
 });
 
