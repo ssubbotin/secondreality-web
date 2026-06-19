@@ -1,0 +1,4 @@
+# Vendored original ENDSCRL assets — store byte-exact (preserve CRLF and binary content) for the
+# byte-exact unit tests.
+ENDSCROL.TXT -text
+FONA.UH -text binary

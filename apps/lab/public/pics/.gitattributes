@@ -1,0 +1,4 @@
+# Vendored original ENDSCRL assets — store byte-exact (preserve CRLF and binary content) so the runtime
+# fetches the same bytes the original DOS code read.
+ENDSCROL.TXT -text
+FONA.UH -text binary
