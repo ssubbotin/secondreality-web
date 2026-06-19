@@ -21,6 +21,7 @@ import {
   Vector2,
   Water,
 } from '@sr/parts';
+import { SEEK_OFFSETS } from './seek-offsets.js';
 
 /** Every part implements Effect plus the authentic/modern mode toggle. */
 export type ModeEffect = Effect & { setMode(m: 'authentic' | 'modern'): void };
@@ -30,44 +31,53 @@ export interface EffectDef {
   create: () => ModeEffect;
   /** Public URL of the module this part plays. */
   moduleUrl: string;
-  /** Start position within that module, in seconds (see the design doc for derivation). */
+  /** Start position within that module, in seconds (see seek-offsets.ts for the derivation). */
   seek: number;
 }
 
-const MUSIC0 = '/music/MUSIC0.S3M';
-const MUSIC1 = '/music/MUSIC1.S3M';
+/** Pull a part's `{ moduleUrl, seek }` out of the derived seek table (throws on a missing id). */
+function seekOf(id: string): { moduleUrl: string; seek: number } {
+  const o = SEEK_OFFSETS[id];
+  if (o === undefined) throw new Error(`seekOf: no seek offset for '${id}'`);
+  return { moduleUrl: o.moduleUrl, seek: o.seek };
+}
 
+/**
+ * Per-part module + start position recovered from the original DIS sequencing (MAIN/U2.ASM part order
+ * and restartmus calls; S3M order/tempo timing). See seek-offsets.ts for the full derivation and the
+ * per-part `note` (which module, and whether the seconds are exact or approximate). Keep these in sync
+ * with that table: the map here is just wiring.
+ */
 export const EFFECTS: Record<string, EffectDef> = {
-  // Seeks derived from the released demo (run in DOSBox, audio cross-correlated to the modules):
-  // techno is ~77s into MUSIC1; rotozoomer ~85s into MUSIC0. Plasma shares MUSIC0 but its exact spot
-  // was ambiguous (rendered rotozoomed at a module transition), so it stays 0 — distinct from rotozoomer.
-  dottunnel: { label: 'Dot tunnel', create: () => new DotTunnel(), moduleUrl: MUSIC0, seek: 30 },
-  techno: { label: 'Techno bars', create: () => new TechnoBars(), moduleUrl: MUSIC1, seek: 77 },
-  rotozoomer: { label: 'Rotozoomer', create: () => new Rotozoomer(), moduleUrl: MUSIC0, seek: 85 },
-  plasma: { label: 'Plasma', create: () => new Plasma(), moduleUrl: MUSIC0, seek: 0 },
-  // Parts #14/#10/#15/#17. Faithful per-part module+seek offsets (cross-correlated from the released
-  // demo, as for techno/rotozoomer) are still TODO — these seeks are placeholder previews.
-  plasmacube: { label: 'Plasmacube', create: () => new Plasmacube(), moduleUrl: MUSIC0, seek: 0 },
-  ddstars: { label: 'Desert Dream stars', create: () => new DDStars(), moduleUrl: MUSIC0, seek: 0 },
+  // Intro section — MUSIC0 played from order 0 (orders are 8.00s apart at spd6/120BPM).
+  alku1: { label: 'Opening texts I', create: () => new Alku1(), ...seekOf('alku1') },
+  alku2: { label: 'Opening texts II', create: () => new Alku2(), ...seekOf('alku2') },
+  alku3: { label: 'Opening texts III', create: () => new Alku3(), ...seekOf('alku3') },
+  vector1: { label: 'Space battle', create: () => new Vector1(), ...seekOf('vector1') },
+  endpic: { label: 'End picture flash', create: () => new Endpic(), ...seekOf('endpic') },
+
+  // Middle section — MUSIC1 (restartmus ax=1,bx=0), parts hand off at the +++ markers in execution order.
+  glenz: { label: 'Glenz vectors', create: () => new Glenz(), ...seekOf('glenz') },
+  dottunnel: { label: 'Dot tunnel', create: () => new DotTunnel(), ...seekOf('dottunnel') },
+  techno: { label: 'Techno bars', create: () => new TechnoBars(), ...seekOf('techno') },
+  panic: { label: 'Panic fake', create: () => new Panic(), ...seekOf('panic') },
+  forest: { label: 'Mountain scroller', create: () => new Forest(), ...seekOf('forest') },
+  lens: { label: 'Lens', create: () => new Lens(), ...seekOf('lens') },
+  rotozoomer: { label: 'Rotozoomer', create: () => new Rotozoomer(), ...seekOf('rotozoomer') },
+  plasma: { label: 'Plasma', create: () => new Plasma(), ...seekOf('plasma') },
+  plasmacube: { label: 'Plasmacube', create: () => new Plasmacube(), ...seekOf('plasmacube') },
   minivectorballs: {
     label: 'MiniVectorBalls',
     create: () => new MiniVectorBalls(),
-    moduleUrl: MUSIC0,
-    seek: 0,
+    ...seekOf('minivectorballs'),
   },
-  comanche: { label: '3D sinus field', create: () => new Comanche(), moduleUrl: MUSIC0, seek: 0 },
-  glenz: { label: 'Glenz vectors', create: () => new Glenz(), moduleUrl: MUSIC0, seek: 0 },
-  endpic: { label: 'End picture flash', create: () => new Endpic(), moduleUrl: MUSIC1, seek: 0 },
-  alku1: { label: 'Opening texts I', create: () => new Alku1(), moduleUrl: MUSIC0, seek: 0 },
-  panic: { label: 'Panic fake', create: () => new Panic(), moduleUrl: MUSIC0, seek: 0 },
-  lens: { label: 'Lens', create: () => new Lens(), moduleUrl: MUSIC0, seek: 0 },
-  forest: { label: 'Mountain scroller', create: () => new Forest(), moduleUrl: MUSIC0, seek: 0 },
-  alku2: { label: 'Opening texts II', create: () => new Alku2(), moduleUrl: MUSIC0, seek: 0 },
-  alku3: { label: 'Opening texts III', create: () => new Alku3(), moduleUrl: MUSIC0, seek: 0 },
-  water: { label: 'Water scroll', create: () => new Water(), moduleUrl: MUSIC0, seek: 0 },
-  credits: { label: 'Credits scroll', create: () => new Credits(), moduleUrl: MUSIC1, seek: 0 },
-  vector1: { label: 'Space battle', create: () => new Vector1(), moduleUrl: MUSIC0, seek: 0 },
-  vector2: { label: 'KewlComplex city', create: () => new Vector2(), moduleUrl: MUSIC0, seek: 0 },
+  water: { label: 'Water scroll', create: () => new Water(), ...seekOf('water') },
+  comanche: { label: '3D sinus field', create: () => new Comanche(), ...seekOf('comanche') },
+
+  // Tail section — MUSIC0 again (exact restartmus order anchors; credits continues from there).
+  vector2: { label: 'KewlComplex city', create: () => new Vector2(), ...seekOf('vector2') },
+  ddstars: { label: 'Desert Dream stars', create: () => new DDStars(), ...seekOf('ddstars') },
+  credits: { label: 'Credits scroll', create: () => new Credits(), ...seekOf('credits') },
 };
 
 export const DEFAULT_EFFECT = 'techno';
