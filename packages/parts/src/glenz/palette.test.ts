@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildBackpalRamp,
-  buildCopperBackground,
   buildGlenzPalette,
   buildGlenzRenderPalette,
   faceBrightness,
@@ -59,36 +58,53 @@ describe('faceBrightness — verbatim GLENZ/VEC.ASM:demo_glz intensity', () => {
   });
 });
 
-describe('buildGlenzRenderPalette — coverage-brightening glass LUT (modern compromise)', () => {
-  it('index 0 is black; brightness rises monotonically with coverage', () => {
-    const pal = buildGlenzRenderPalette();
-    expect(pal).toHaveLength(768);
-    expect([pal[0], pal[1], pal[2]]).toEqual([0, 0, 0]);
-    const lum = (a: number) => (pal[a * 3] ?? 0) + (pal[a * 3 + 1] ?? 0) + (pal[a * 3 + 2] ?? 0);
-    // More coverage bits => brighter (one bit < three bits < the lit-plus-bits high indices).
-    expect(lum(0b0001)).toBeLessThan(lum(0b0111));
-    expect(lum(0b0111)).toBeLessThanOrEqual(lum(0b1111));
-    for (let i = 0; i < 768; i++) expect(pal[i]).toBeLessThanOrEqual(63);
-  });
-});
-
-describe('buildCopperBackground — procedural copper bars (FC picture deferred)', () => {
-  it('fills each scanline with a low copper-ramp index, constant across a row', () => {
-    const bg = buildCopperBackground(320, 200, 0);
-    expect(bg).toHaveLength(320 * 200);
-    for (let y = 0; y < 200; y++) {
-      const v = bg[y * 320] ?? -1;
-      expect(v).toBeGreaterThanOrEqual(1);
-      expect(v).toBeLessThanOrEqual(7);
-      expect(bg[y * 320 + 319]).toBe(v); // constant across the row
+describe('buildGlenzRenderPalette — FC backdrop base + glenz coverage brightening', () => {
+  // A representative FC ramp: index 0 black, index 1 a dark purple (as in FC.UH), the rest a gradient.
+  const backpal = (): Uint8Array => {
+    const bp = new Uint8Array(16 * 3);
+    bp[3] = 13;
+    bp[4] = 9;
+    bp[5] = 13; // index 1
+    for (let a = 2; a < 16; a++) {
+      bp[a * 3] = a * 2;
+      bp[a * 3 + 1] = a;
+      bp[a * 3 + 2] = a * 2;
     }
+    return bp;
+  };
+
+  it('a pure FC byte (no glenz bits) renders the FC backdrop colour verbatim', () => {
+    const bp = backpal();
+    const pal = buildGlenzRenderPalette(bp);
+    expect(pal).toHaveLength(768);
+    // Index 0: black background pixel stays black.
+    expect([pal[0], pal[1], pal[2]]).toEqual([0, 0, 0]);
+    // Index 1 (FC dark purple), no coverage bits set above the low nibble -> the FC colour itself.
+    expect([pal[3], pal[4], pal[5]]).toEqual([13, 9, 13]);
+    // Index 7 (FC nibble, no high/lit bits) -> FC colour 7.
+    expect([pal[21], pal[22], pal[23]]).toEqual([bp[21], bp[22], bp[23]]);
   });
 
-  it('phase shifts the bars', () => {
-    const a = buildCopperBackground(320, 200, 0);
-    const b = buildCopperBackground(320, 200, 64);
-    let differs = false;
-    for (let y = 0; y < 200; y++) if (a[y * 320] !== b[y * 320]) differs = true;
-    expect(differs).toBe(true);
+  it('brightness rises monotonically as glenz coverage bits accumulate over the FC base', () => {
+    const pal = buildGlenzRenderPalette(backpal());
+    const lum = (a: number) => (pal[a * 3] ?? 0) + (pal[a * 3 + 1] ?? 0) + (pal[a * 3 + 2] ?? 0);
+    // Same FC base nibble (1), increasing glenz bits: lit bit, then one high bit, then more.
+    const base = 0b0001;
+    expect(lum(base)).toBeLessThan(lum(base | 0x08)); // lit bit adds glass
+    expect(lum(base | 0x08)).toBeLessThanOrEqual(lum(base | 0x08 | 0x10));
+    expect(lum(base | 0x08 | 0x10)).toBeLessThanOrEqual(lum(base | 0xf8));
+  });
+
+  it('never lowers a pixel below its FC base and clamps every component to 63', () => {
+    const bp = backpal();
+    const pal = buildGlenzRenderPalette(bp);
+    for (let a = 0; a < 256; a++) {
+      const fcBase = a & 0x0f;
+      // The composite must be at least as bright as the FC base in each channel.
+      expect(pal[a * 3] ?? 0).toBeGreaterThanOrEqual(bp[fcBase * 3] ?? 0);
+      expect(pal[a * 3]).toBeLessThanOrEqual(63);
+      expect(pal[a * 3 + 1]).toBeLessThanOrEqual(63);
+      expect(pal[a * 3 + 2]).toBeLessThanOrEqual(63);
+    }
   });
 });

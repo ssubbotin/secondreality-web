@@ -1,11 +1,15 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
+import { decodeFcPicture, fcBackground, fcBackpal } from './fc-picture.js';
 import { MAIN_SOLID, SMALL_SOLID } from './geometry.js';
 import { GlenzFill, type GlenzPolygon, SCREEN_H, SCREEN_W } from './glenz-fill.js';
 import { GlenzSurface } from './nodes.js';
-import { buildCopperBackground, buildGlenzRenderPalette } from './palette.js';
+import { buildGlenzRenderPalette } from './palette.js';
 import { buildSolidPolygons, projectSolid } from './render.js';
 import { createGlenzState, type GlenzState, stepGlenz } from './sim.js';
+
+/** The FC backdrop picture (GLENZ/FC.UH), the background the glenz solids OR over. */
+const FC_PICTURE_URL = '/pics/FC.UH';
 
 /** authentic = chunky 320x200 nearest upscale; modern = smooth LinearFilter upscale (default). */
 export type LookMode = 'authentic' | 'modern';
@@ -16,11 +20,13 @@ const ZPOS = 7500; // MAIN.C zpos
 const LOOP_FRAME = 2100; // self-loop point in the lab (both solids have come and the scales collapse)
 
 /**
- * Glenz vectors (part #4, original GLENZ). Real-time 3D additive "glass" solids spun over a copper
- * background. update() advances the MAIN.C sim at a fixed 70 Hz; render() runs the full CPU pipeline
- * (rotate/scale/project/cull/colour each solid -> additive XOR fill -> copper-bar background) into a
- * 320x200 index buffer, then blits it through the glenz render palette into the supplied target. Both
- * modes use the CPU rasteriser; the look toggles via the upscale filter (authentic = NearestFilter,
+ * Glenz vectors (part #4, original GLENZ). Real-time 3D additive "glass" solids spun over the FC backdrop
+ * picture. update() advances the MAIN.C sim at a fixed 70 Hz; render() runs the full CPU pipeline
+ * (rotate/scale/project/cull/colour each solid -> additive XOR fill ORed over the FC backdrop) into a
+ * 320x200 index buffer, then blits it through the glenz render palette into the supplied target. The
+ * background is GLENZ/FC.UH (the Future Crew logo backdrop) — MAIN.C draws it, snapshots it into `bgpic`,
+ * and the glenz scanline filler ORs each solid over that snapshot (NEW.ASM ng_pass3 `or ah,fs:[di]`).
+ * Both modes use the CPU rasteriser; the look toggles via the upscale filter (authentic = NearestFilter,
  * modern = LinearFilter). A real GPU-geometry additive renderer is deferred — see STATUS.
  */
 export class Glenz implements Effect {
@@ -28,17 +34,24 @@ export class Glenz implements Effect {
 
   private ctx: DemoContext | null = null;
   private mode: LookMode = 'modern';
-  private readonly palette = buildGlenzRenderPalette();
+  // Render palette + background are derived from the decoded FC picture in load(); a neutral fallback
+  // (black backpal) keeps the part renderable if load() has not completed.
+  private palette = buildGlenzRenderPalette(new Uint8Array(16 * 3));
   private readonly fill = new GlenzFill();
   private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
-  private background = buildCopperBackground(SCREEN_W, SCREEN_H, 0);
+  private background: Uint8Array = new Uint8Array(SCREEN_W * SCREEN_H);
   private state: GlenzState = createGlenzState();
   private surface: GlenzSurface | null = null;
   private acc = 0;
-  private copperPhase = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
-    // No external assets — geometry/tables are code. The FC background picture is deferred (STATUS).
+    // Decode the FC backdrop (FC.UH): its own 16-colour palette becomes the render-palette base and its
+    // index plane becomes the background the additive glenz fill ORs over.
+    const res = await fetch(FC_PICTURE_URL);
+    if (!res.ok) throw new Error(`glenz: failed to load ${FC_PICTURE_URL} (${res.status})`);
+    const pic = decodeFcPicture(await res.arrayBuffer());
+    this.background = fcBackground(pic);
+    this.palette = buildGlenzRenderPalette(fcBackpal(pic));
   }
 
   init(ctx: DemoContext): void {
@@ -46,7 +59,6 @@ export class Glenz implements Effect {
     this.surface = new GlenzSurface(this.palette);
     this.state = createGlenzState();
     this.acc = 0;
-    this.copperPhase = 0;
     this.applyMode();
   }
 
@@ -66,7 +78,6 @@ export class Glenz implements Effect {
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       stepGlenz(this.state);
-      this.copperPhase = (this.copperPhase + 1) & 0xff;
       if (this.state.frame >= LOOP_FRAME) {
         this.state = createGlenzState(); // self-loop in the lab
       }
@@ -99,7 +110,7 @@ export class Glenz implements Effect {
       for (const p of buildSolidPolygons(SMALL_SOLID, proj, s.lightshift)) polys.push(p);
     }
 
-    this.background = buildCopperBackground(SCREEN_W, SCREEN_H, this.copperPhase);
+    // The FC backdrop is the static background; the additive glenz fill ORs the solids over it.
     this.fill.render(this.index, this.background, polys);
     this.surface?.update(this.index);
   }
