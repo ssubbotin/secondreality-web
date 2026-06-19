@@ -1,23 +1,24 @@
 /**
- * The per-frame CPU rendering pipeline — the C/ASM `vDraw` loop (MAIN.C) + vis_drawobject (VISU.C) +
- * draw_polylist (ADRAW) ported to fill a palette-index buffer:
+ * The per-frame CPU rendering pipeline — U2E.C's draw loop + vis_drawobject (VISU.C) + draw_polylist
+ * (ADRAW) ported to fill a palette-index buffer:
  *
- *   for each visible object (painter-sorted back-to-front by its centre Z under the camera):
- *     transform its world vertices by the camera rmatrix (calc_rotate)
- *     transform its face normals by the camera rotation (calc_nrotate)
+ *   for each enabled object:
+ *     compose its accumulated relative matrix r0 with the camera (calc_applyrmatrix → world matrix r)
+ *     compute its distance: calc_singlez of its centre vertex (name[1]=='_' → forced far; s01 fly-in → near)
+ *   sort objects back-to-front by that distance (the original insertion sort), then per object:
+ *     transform its object-local vertices by r (calc_rotate)
+ *     transform each face normal by r's rotation (calc_nrotate)
  *     project the vertices (calc_project)
  *     for each face: cull back faces (checkculling N·V>=0), shade (calclight), fill the triangle.
  *
- * Objects are depth-sorted by `calc_singlez` of their centre vertex, exactly as MAIN.C/U2E.C do; faces
- * within an object are not re-sorted (the city meshes are mostly convex shells, matching the original
- * which relied on precomputed per-direction polygon order — approximated here by object-level sort).
+ * Faces within an object are not re-sorted (the city meshes are mostly convex shells; the original relied
+ * on precomputed per-direction polygon order — approximated here by object-level Z-sort, as before).
  */
 
-import { type RMatrix, rotateSingle, rotateVertex, singleZ } from './fixed.js';
-import type { BakedMesh, BakedModel } from './model.js';
+import { applyRMatrix, type RMatrix, rotateSingle, rotateVertex, singleZ } from './fixed.js';
+import type { BakedMesh, BakedModel, BakedObject } from './model.js';
 import {
   calcLight,
-  isBackFacing,
   makeWindow,
   type Projected,
   type Projection,
@@ -27,8 +28,17 @@ import {
 } from './project.js';
 import { fillTriangle, SCREEN_H, SCREEN_W } from './raster.js';
 
+/** U2E.C ship fly-in window: while currframe ∈ (1800,2200) ≈ frameIndex ∈ (900,1100) the `s01` ship is
+ * forced dist=1 (drawn nearest, on top). */
+const S01_FRAME_MIN = 900;
+const S01_FRAME_MAX = 1100;
+const S01_NAME = '"s01"';
+const FAR_DIST = 1000000000;
+const NEAR_DIST = 1;
+
 export interface SceneRenderer {
-  render(buf: Uint8Array, cam: RMatrix, visibleMeshIndices: number[]): void;
+  /** Render one frame's visible objects (mesh + per-object matrix) against the camera. */
+  render(buf: Uint8Array, cam: RMatrix, objects: readonly BakedObject[], frameIndex?: number): void;
   readonly projection: Projection;
 }
 
@@ -43,32 +53,49 @@ function buildProjection(model: BakedModel): Projection {
 /** Create a renderer bound to a baked model. Reuses scratch buffers across frames (no per-frame alloc). */
 export function createSceneRenderer(model: BakedModel): SceneRenderer {
   const proj = buildProjection(model);
-  // Scratch: projected vertices reused per mesh (sized to the largest mesh).
+  // Scratch: projected + camera-space vertices reused per mesh (sized to the largest mesh).
   const maxVerts = model.meshes.reduce((m, me) => Math.max(m, me.verts.length / 3), 0);
   const projX = new Int32Array(maxVerts);
   const projY = new Int32Array(maxVerts);
   const projVf = new Int32Array(maxVerts);
-  // Camera-space vertices (for the back-face cull which needs a vertex position).
+  const camX = new Float64Array(maxVerts);
+  const camY = new Float64Array(maxVerts);
   const camZ = new Float64Array(maxVerts);
 
-  const render = (buf: Uint8Array, cam: RMatrix, visible: number[]): void => {
-    // Depth-sort the visible meshes back-to-front by their centre Z under the camera (painter's order).
-    const order = visible
-      .map((mi) => {
-        const mesh = model.meshes[mi];
-        if (!mesh) return { mi, dist: -Infinity };
-        // Centre vertex ≈ vertex 0 (the engine stores a precomputed centre; vertex 0 is a faithful
-        // stand-in for the object-level sort key here).
-        const vx = mesh.verts[0] ?? 0;
-        const vy = mesh.verts[1] ?? 0;
-        const vz = mesh.verts[2] ?? 0;
-        return { mi, dist: singleZ(cam, vx, vy, vz) };
+  const render = (
+    buf: Uint8Array,
+    cam: RMatrix,
+    objects: readonly BakedObject[],
+    frameIndex = -1,
+  ): void => {
+    const s01Window = frameIndex > S01_FRAME_MIN && frameIndex < S01_FRAME_MAX;
+
+    // Compose each object with the camera + compute its painter distance (U2E.C ordernum / dist loop).
+    const order = objects
+      .map((ob) => {
+        const mesh = model.meshes[ob.mesh];
+        const r = applyRMatrix({ m: ob.m, x: ob.x, y: ob.y, z: ob.z }, cam);
+        let dist: number;
+        if (ob.far) {
+          dist = FAR_DIST;
+        } else if (!mesh) {
+          dist = -Infinity;
+        } else {
+          const cv = mesh.centerVertex;
+          dist = singleZ(
+            r,
+            mesh.verts[cv * 3] ?? 0,
+            mesh.verts[cv * 3 + 1] ?? 0,
+            mesh.verts[cv * 3 + 2] ?? 0,
+          );
+          if (s01Window && mesh.name === S01_NAME) dist = NEAR_DIST;
+        }
+        return { mesh, r, dist };
       })
       .sort((p, q) => q.dist - p.dist); // far first
 
-    for (const { mi } of order) {
-      const mesh = model.meshes[mi];
-      if (mesh) drawMesh(buf, mesh, cam, proj, projX, projY, projVf, camZ);
+    for (const { mesh, r } of order) {
+      if (mesh) drawMesh(buf, mesh, r, proj, projX, projY, projVf, camX, camY, camZ);
     }
   };
 
@@ -78,46 +105,50 @@ export function createSceneRenderer(model: BakedModel): SceneRenderer {
 function drawMesh(
   buf: Uint8Array,
   mesh: BakedMesh,
-  cam: RMatrix,
+  r: RMatrix,
   proj: Projection,
   projX: Int32Array,
   projY: Int32Array,
   projVf: Int32Array,
+  camX: Float64Array,
+  camY: Float64Array,
   camZ: Float64Array,
 ): void {
   const vn = mesh.verts.length / 3;
   let allVf = 0xffff;
   for (let i = 0; i < vn; i++) {
     const [cx, cy, cz] = rotateVertex(
-      cam,
+      r,
       mesh.verts[i * 3] ?? 0,
       mesh.verts[i * 3 + 1] ?? 0,
       mesh.verts[i * 3 + 2] ?? 0,
     );
+    camX[i] = cx;
+    camY[i] = cy;
     camZ[i] = cz;
     const p: Projected = projectVertex(proj, cx, cy, cz);
     projX[i] = p.x;
     projY[i] = p.y;
     projVf[i] = p.vf;
     allVf &= p.vf;
-    // Stash the camera-space vertex for culling via a side array packed in camZ-adjacent slots is heavy;
-    // instead recompute the needed vertex during culling below (cheap, one rotate per visible face).
   }
   if (allVf !== 0) return; // VISU.C: whole object off one screen edge → skip.
 
+  const nrm = mesh.normals;
   for (const t of mesh.tris) {
-    // Rotate the face normal by the camera rotation (calc_nrotate) — rotation only, no translation.
-    const [nx, ny, nz] = rotateSingle(cam.m, t.nx, t.ny, t.nz);
+    // Rotate the stored face normal by the camera+object rotation (calc_nrotate) — rotation only.
+    const [nx, ny, nz] = rotateSingle(
+      r.m,
+      nrm[t.n * 3] ?? 0,
+      nrm[t.n * 3 + 1] ?? 0,
+      nrm[t.n * 3 + 2] ?? 0,
+    );
     // Back-face cull: N·V >= 0 (V = a rotated+translated face vertex in camera space). Two-sided
     // materials skip the cull.
-    const va = t.a;
-    const [vx, vy, vz] = rotateVertex(
-      cam,
-      mesh.verts[va * 3] ?? 0,
-      mesh.verts[va * 3 + 1] ?? 0,
-      mesh.verts[va * 3 + 2] ?? 0,
-    );
-    if (!t.twoSided && isBackFacing(nx, ny, nz, vx, vy, vz)) continue;
+    if (!t.twoSided) {
+      const dot = nx * (camX[t.a] ?? 0) + ny * (camY[t.a] ?? 0) + nz * (camZ[t.a] ?? 0);
+      if (dot >= 0) continue;
+    }
 
     // Skip faces touching the near plane (any vertex VF_NEAR → undefined screen coords).
     const fa = projVf[t.a] ?? 0;

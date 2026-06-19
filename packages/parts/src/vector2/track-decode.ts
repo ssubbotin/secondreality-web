@@ -17,12 +17,29 @@
 
 export const CAMERA_INDEX = 0;
 
+/** One enabled object's accumulated relative transform (U2E.C `co[i].o->r0`) snapshot for a frame. */
+export interface ObjectXform {
+  /** co[] table index (1-based; 0 is the camera). */
+  co: number;
+  /** Accumulated rmatrix: m[0..8] (16.14 fixed) + position x,y,z. Identity for static objects. */
+  m: number[];
+  x: number;
+  y: number;
+  z: number;
+}
+
 /** A decoded per-frame snapshot: the camera matrix (rmatrix) plus the visible object index list. */
 export interface TrackFrame {
   /** Camera rmatrix: m[0..8] (16.14 fixed) + position x,y,z. */
   cam: { m: number[]; x: number; y: number; z: number };
   /** Indices (1-based into the co[] table) of objects enabled this frame. */
   on: number[];
+  /**
+   * Per-enabled-object accumulated relative matrix (r0) this frame, in the same order as `on`. The
+   * renderer composites each with the camera (`calc_applyrmatrix`); static objects carry identity, the
+   * BuildingH/cars/signs carry their decoded rotation + translation so they animate.
+   */
+  objects: ObjectXform[];
   /** Field-of-view angle in effect this frame (0..65535; U2E holds 0x1C00 throughout). */
   fov: number;
 }
@@ -150,9 +167,14 @@ export function decodeTrack(data: Uint8Array, conum: number, maxFrames = 8000): 
     }
     if (xit) break;
     const cam = matrices[CAMERA_INDEX] ?? { m: [], x: 0, y: 0, z: 0 };
+    const enabled = collectOn(on);
     frames.push({
       cam: { m: cam.m.slice(), x: cam.x, y: cam.y, z: cam.z },
-      on: collectOn(on),
+      on: enabled,
+      objects: enabled.map((co) => {
+        const mm = matrices[co] ?? { m: [], x: 0, y: 0, z: 0 };
+        return { co, m: mm.m.slice(), x: mm.x, y: mm.y, z: mm.z };
+      }),
       fov,
     });
     frame++;

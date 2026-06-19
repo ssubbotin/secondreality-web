@@ -15,7 +15,7 @@ const palette = parsePalette(new Uint8Array(readFileSync(dir('U2E.PAL'))));
 // SceneRenderer the Effect uses, plus the frame-advance arithmetic, without a GPU.
 describe('Vector2 flythrough playback (headless)', () => {
   it('the baked model is loadable and has the expected shape', () => {
-    expect(model.meshes.length).toBe(25);
+    expect(model.meshes.length).toBe(42);
     expect(model.frames.length).toBe(1801);
     expect(model.fov).toBe(0x1c00);
     expect(palette.length).toBe(256 * 3);
@@ -42,11 +42,11 @@ describe('Vector2 flythrough playback (headless)', () => {
 
   it('renders a non-empty index buffer for a frame with visible city', () => {
     const renderer = createSceneRenderer(model);
-    const fi = model.frames.findIndex((f) => f.vis.length >= 4);
+    const fi = model.frames.findIndex((f) => f.objects.length >= 4);
     const buf = new Uint8Array(SCREEN_W * SCREEN_H);
     const f = model.frames[fi];
     if (!f) throw new Error('no frame');
-    renderer.render(buf, { m: f.m, x: f.x, y: f.y, z: f.z }, f.vis);
+    renderer.render(buf, { m: f.m, x: f.x, y: f.y, z: f.z }, f.objects, fi);
     expect(buf.some((v) => v !== 0)).toBe(true);
   });
 
@@ -57,7 +57,9 @@ describe('Vector2 flythrough playback (headless)', () => {
       buf.fill(0);
       const f = model.frames[i];
       if (!f) continue;
-      expect(() => renderer.render(buf, { m: f.m, x: f.x, y: f.y, z: f.z }, f.vis)).not.toThrow();
+      expect(() =>
+        renderer.render(buf, { m: f.m, x: f.x, y: f.y, z: f.z }, f.objects, i),
+      ).not.toThrow();
     }
   });
 });

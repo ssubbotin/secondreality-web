@@ -93,7 +93,7 @@ export class Vector2 implements Effect {
     if (!f) return;
     const cam: RMatrix = { m: f.m, x: f.x, y: f.y, z: f.z };
     this.index.fill(0);
-    renderer.render(this.index, cam, f.vis);
+    renderer.render(this.index, cam, f.objects, this.frameIndex);
     this.surface?.update(this.index);
   }
 
