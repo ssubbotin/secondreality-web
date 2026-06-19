@@ -102,6 +102,39 @@ describe('comanche raster (THELOOP voxel walk)', () => {
     for (const v of out) expect(v).toBeLessThanOrEqual(255);
   });
 
+  it('the COMBG backdrop fills the sky and the terrain composites on top of it', () => {
+    // _docopy blits the COMBG sky first, then the terrain over it. A backdrop passed to rasterField must
+    // survive in the upper rows the ray never hits, while the lower terrain rows overwrite it.
+    const backdrop = new Uint8Array(FIELD_W * 90);
+    // A recognisable non-zero sky band over rows 60..89 (mirrors COMBG's 225..255 horizon ramp).
+    for (let y = 60; y < 90; y++) for (let x = 0; x < FIELD_W; x++) backdrop[y * FIELD_W + x] = 250;
+    const out = new Uint8Array(FIELD_W * FIELD_H);
+    out.fill(99); // poison
+    const s = createFieldState();
+    for (let i = 0; i < 60; i++) stepField(s, sin1024);
+    rasterField(out, s, heightX, heightY, off, backdrop);
+    // Row 0 (above both backdrop band and terrain) is sky-black, not the poison.
+    for (let x = 0; x < FIELD_W; x++) expect(out[x] ?? 0).toBe(0);
+    // The bottom row is solid terrain (the ray always hits near the camera) — backdrop overwritten.
+    let litBottom = 0;
+    for (let x = 0; x < FIELD_W; x++) if ((out[199 * FIELD_W + x] ?? 0) > 0) litBottom++;
+    expect(litBottom).toBeGreaterThan(FIELD_W / 2);
+    // Somewhere in the backdrop band (rows 60..89) the sky value 250 survives where no terrain reaches.
+    let survived = 0;
+    for (let y = 60; y < 90; y++)
+      for (let x = 0; x < FIELD_W; x++) if ((out[y * FIELD_W + x] ?? 0) === 250) survived++;
+    expect(survived).toBeGreaterThan(0);
+  });
+
+  it('rasterField without a backdrop clears the sky to 0 (the math-only path is unchanged)', () => {
+    const out = new Uint8Array(FIELD_W * FIELD_H);
+    out.fill(99);
+    const s = createFieldState();
+    for (let i = 0; i < 60; i++) stepField(s, sin1024);
+    rasterField(out, s, heightX, heightY, off);
+    for (let x = 0; x < FIELD_W; x++) expect(out[x] ?? 0).toBe(0); // top row sky-black
+  });
+
   it('columns are independent (different ray steps yield different silhouettes)', () => {
     const a = runColumn(0, 0, 0, 74);
     const b = runColumn(5000, 3000, -20, 40);

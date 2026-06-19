@@ -13,16 +13,15 @@ import { buildSin1024, cdiv } from './tables.js';
  *   pal[0..2] = 0                                            // index 0 forced black
  *   for x in 720..767:  pal[x] = combg[16+x]                 // the COMBG.LBM picture entries (240..255)
  *
- * The final COMBG loop overwrites palette indices 240..255 with `combg[16+x]` (x=720..767). The original
- * `combg[]` is the *unpacked* COMBG.UH (`lbm2u combg.lbm combg.uh`, linked via `doobj`), NOT the raw IFF
- * LBM — its 16-byte header is followed by a 768-byte palette region that is **all zero** in this build, so
- * those colour bytes land as black. Ported verbatim as black; this overrides the procedural red-band
- * values the earlier loop had written into 240..255. (The 1993 COMBG backdrop body re-uses indices 0 and
- * 225..255, so the horizon silhouette renders as faint dark-red fading to black — the backdrop blit itself
- * is deferred; see STATUS.) All `/` are C integer division. Tag the uploaded texture SRGBColorSpace so the
- * 6-bit→8-bit (×4) bytes land verbatim.
+ * The final COMBG loop overwrites palette indices 240..255 with `combg[16+x]` (x=720..767) — MAIN.C's
+ * `combg[]` is the COMBG picture's 6-bit palette (`lbm2u combg.lbm combg.uh` writes the CMAP as `getc/4`),
+ * so indices 240..255 become the dark-blue→light-blue horizon ramp the backdrop body draws into. Pass the
+ * decoded `paletteBand` (48 bytes = 16 colours × 6-bit RGB, from `decodeCombg`) to apply it; omit it and the
+ * band stays black (the pre-backdrop behaviour, kept for the math-only unit tests). The band overrides the
+ * procedural red-band values the earlier loop wrote into 240..255. All `/` are C integer division. Tag the
+ * uploaded texture SRGBColorSpace so the 6-bit→8-bit (×4) bytes land verbatim.
  */
-export function buildComanchePalette(): Uint8Array {
+export function buildComanchePalette(paletteBand?: Uint8Array): Uint8Array {
   const sin1024 = buildSin1024();
   const p = new Uint8Array(256 * 3);
   const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -59,9 +58,9 @@ export function buildComanchePalette(): Uint8Array {
   p[0] = 0;
   p[1] = 0;
   p[2] = 0;
-  // The COMBG.LBM (unpacked COMBG.UH) palette band overwrites colour indices 240..255. That region of
-  // COMBG.UH is all zero in this build, so the bytes land as black — ported verbatim. (MAIN.C:
-  // `for(x=(256-16)*3;x<768;x++) palette[x]=combg[16+x];`.)
-  for (let x = (256 - 16) * 3; x < 768; x++) p[x] = 0;
+  // The COMBG palette band overwrites colour indices 240..255 (MAIN.C:
+  // `for(x=(256-16)*3;x<768;x++) palette[x]=combg[16+x];`). `combg[16+x]` is the COMBG 6-bit palette byte;
+  // with no band supplied it falls back to black (the math-only path).
+  for (let x = (256 - 16) * 3; x < 768; x++) p[x] = paletteBand?.[x - (256 - 16) * 3] ?? 0;
   return p;
 }

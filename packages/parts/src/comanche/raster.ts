@@ -166,12 +166,18 @@ export function rasterColumn(
 }
 
 /**
- * Rasterise one frame into a FIELD_W×FIELD_H (160×200) 8-bit palette-index buffer. Clears the sky to
- * palette 0 first, then casts one ray per screen column (MAIN.C doit() inner loop): each column's wave
- * position is the camera position (xwav/ywav) and its ray step is columnRay(a). Image x = column a
- * (the de-planarised screen order the mode-X `docopy` reconstructs from the (a&1)·80+(a>>1) vbuf
- * layout). The ray-height accumulator starts at 0 (the shipped theloop xor-zeroes eax, so the
- * `cameralevel` arg the entry stub stored is unused) — `CAMERA_LEVEL` lives in field-sim for parity.
+ * Rasterise one frame into a FIELD_W×FIELD_H (160×200) 8-bit palette-index buffer. The sky is laid down
+ * first — the COMBG backdrop body (FIELD_W×COMBG_H, screen-row order) when supplied, else palette 0 — then
+ * one ray per screen column is cast ON TOP of it (MAIN.C `doit()` inner loop + `_docopy`, which blits the
+ * COMBG sky then composites the terrain over it). Each column's wave position is the camera position
+ * (xwav/ywav) and its ray step is columnRay(a). Image x = column a (the de-planarised screen order the
+ * mode-X `docopy` reconstructs from the (a&1)·80+(a>>1) vbuf layout). The ray-height accumulator starts at
+ * 0 (the shipped theloop xor-zeroes eax, so the `cameralevel` arg the entry stub stored is unused) —
+ * `CAMERA_LEVEL` lives in field-sim for parity.
+ *
+ * `backdrop` is `decodeCombg().body` (FIELD_W × COMBG_H = 160×90); its rows fill screen rows 0..89, the rest
+ * stay sky-black. The terrain raster overwrites every hit cell, so where the terrain rises it covers the
+ * sky exactly as the original mode-X copy did.
  */
 export function rasterField(
   out: Uint8Array,
@@ -179,8 +185,14 @@ export function rasterField(
   heightX: Int16Array,
   heightY: Int16Array,
   off: Int16Array,
+  backdrop?: Uint8Array,
 ): void {
-  out.fill(0);
+  if (backdrop) {
+    out.set(backdrop.subarray(0, Math.min(backdrop.length, out.length)));
+    if (backdrop.length < out.length) out.fill(0, backdrop.length);
+  } else {
+    out.fill(0);
+  }
   const xw = even(s.xwav);
   const yw = even(s.ywav);
   for (let a = 0; a < FIELD_W; a++) {
