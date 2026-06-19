@@ -1,5 +1,8 @@
 export { Alku1 } from './alku1/alku1.js';
+export { Alku2 } from './alku2/alku2.js';
+export { Alku3 } from './alku3/alku3.js';
 export { Comanche } from './comanche/comanche.js';
+export { Credits } from './credits/credits.js';
 export { DDStars } from './ddstars/ddstars.js';
 export { DotTunnel } from './dot-tunnel/dot-tunnel.js';
 export { Endpic } from './endpic/endpic.js';
@@ -12,3 +15,4 @@ export { Plasma } from './plasma/plasma.js';
 export { Plasmacube } from './plasmacube/plasmacube.js';
 export { Rotozoomer } from './rotozoomer/rotozoomer.js';
 export { TechnoBars } from './techno-bars/techno-bars.js';
+export { Water } from './water/water.js';

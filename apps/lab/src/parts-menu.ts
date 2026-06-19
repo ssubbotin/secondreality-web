@@ -14,14 +14,14 @@ interface Part {
 
 const PARTS: readonly Part[] = [
   { n: 1, name: 'Opening texts I', effect: 'alku1' },
-  { n: 2, name: 'Opening texts II', effect: null },
-  { n: 3, name: 'Opening texts III', effect: null },
+  { n: 2, name: 'Opening texts II', effect: 'alku2' },
+  { n: 3, name: 'Opening texts III', effect: 'alku3' },
   { n: 4, name: 'Glenz vectors', effect: 'glenz' },
   { n: 5, name: 'Dot tunnel', effect: 'dottunnel' },
   { n: 6, name: 'Techno bars', effect: 'techno' },
   { n: 7, name: 'Panic fake', effect: 'panic' },
   { n: 8, name: 'Vector I — Space battle', effect: null },
-  { n: 9, name: 'Mirror-ball water scroll', effect: null },
+  { n: 9, name: 'Mirror-ball water scroll', effect: 'water' },
   { n: 10, name: 'Desert Dream stars', effect: 'ddstars' },
   { n: 11, name: 'Lens', effect: 'lens' },
   { n: 12, name: 'Rotozoomer', effect: 'rotozoomer' },
@@ -32,7 +32,7 @@ const PARTS: readonly Part[] = [
   { n: 17, name: '3D Sinus field', effect: 'comanche' },
   { n: 18, name: 'Vector II — City', effect: null },
   { n: 19, name: 'End picture flash', effect: 'endpic' },
-  { n: 20, name: 'Credits / greetings', effect: null },
+  { n: 20, name: 'Credits / greetings', effect: 'credits' },
 ];
 
 export interface PartsMenu {

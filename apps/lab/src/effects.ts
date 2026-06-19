@@ -1,7 +1,10 @@
 import type { Effect } from '@sr/engine';
 import {
   Alku1,
+  Alku2,
+  Alku3,
   Comanche,
+  Credits,
   DDStars,
   DotTunnel,
   Endpic,
@@ -14,6 +17,7 @@ import {
   Plasmacube,
   Rotozoomer,
   TechnoBars,
+  Water,
 } from '@sr/parts';
 
 /** Every part implements Effect plus the authentic/modern mode toggle. */
@@ -56,6 +60,10 @@ export const EFFECTS: Record<string, EffectDef> = {
   panic: { label: 'Panic fake', create: () => new Panic(), moduleUrl: MUSIC0, seek: 0 },
   lens: { label: 'Lens', create: () => new Lens(), moduleUrl: MUSIC0, seek: 0 },
   forest: { label: 'Mountain scroller', create: () => new Forest(), moduleUrl: MUSIC0, seek: 0 },
+  alku2: { label: 'Opening texts II', create: () => new Alku2(), moduleUrl: MUSIC0, seek: 0 },
+  alku3: { label: 'Opening texts III', create: () => new Alku3(), moduleUrl: MUSIC0, seek: 0 },
+  water: { label: 'Water scroll', create: () => new Water(), moduleUrl: MUSIC0, seek: 0 },
+  credits: { label: 'Credits scroll', create: () => new Credits(), moduleUrl: MUSIC1, seek: 0 },
 };
 
 export const DEFAULT_EFFECT = 'techno';
