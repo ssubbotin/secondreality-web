@@ -1,16 +1,20 @@
-// The glenz palette + face-brightness rule. The original loads the 16-colour background ramp from the FC
-// picture (deferred — see STATUS) and animates it per scanline (the copper bars). We use the procedural
-// ramp MAIN.C builds itself (MAIN.C:557-584) as a faithful stand-in: a red-biased copper gradient keyed
-// off the colour-index bits, which is exactly what the additive glenz fill ORs over. buildGlenzPalette
-// reproduces MAIN.C:357-388 (`tmppal`): the 256-entry LUT that turns OR-accumulated colour bytes into a
-// brightening ramp.
+// The glenz palette + face-brightness rule. The original draws the FC backdrop picture (GLENZ/FC.UH) and
+// the additive glenz solids OR their colour over it (NEW.ASM ng_pass3). The DAC palette during the loop is
+// MAIN.C's `tmppal` (MAIN.C:357-388): indices 0..15 are the FC picture's own 16-colour ramp (`backpal`,
+// copied from the picture's palette), and the glenz overlay reuses `a&7` brightened by the lit bit. The
+// original additionally reprogrammed the DAC per face from each face's brightness (VEC.ASM demo_glz); a
+// static index->colour LUT can't do that, so the glenz overlay brightening here is keyed by *coverage*
+// (the more faces overlap, the brighter/glassier the pixel) — a documented compromise faithful to the
+// observable look. buildGlenzPalette reproduces `tmppal` byte-exactly; buildGlenzRenderPalette is the
+// composite LUT the GPU surface samples (FC base + glenz coverage brightening).
 
 export const PAL_BYTES = 768; // 256 entries * 3 (6-bit VGA components)
 
 /**
- * The 16-entry background ramp, MAIN.C:557-584 verbatim:
+ * The synthetic 16-entry "fadeout" ramp MAIN.C rebuilds late in the loop (MAIN.C:769-787), kept as a
+ * known reference fixture for the buildGlenzPalette test:
  *   r = (a&1?10:0)+(a&2?30:0)+(a&4?20:0); g=b=0; if(a&8){ r+=16; g+=16; b+=16; } clamp 63.
- * A copper-style red gradient that brightens with bit 3 set.
+ * (The live background ramp is the FC picture's own palette, fc-picture.ts fcBackpal — not this.)
  */
 export function buildBackpalRamp(): Uint8Array {
   const bp = new Uint8Array(16 * 3);
@@ -34,11 +38,11 @@ export function buildBackpalRamp(): Uint8Array {
 }
 
 /**
- * buildGlenzPalette (MAIN.C:366-388): 256-entry VGA LUT.
+ * buildGlenzPalette (MAIN.C:366-388): the 256-entry `tmppal` VGA LUT, byte-exact.
  *   for a in [0,256): base = a<16 ? a : (a&7); take backpal[base]; if (a&8) && a>15 add 16 to each
  *   component; clamp 63.
- * Indices 0..15 are the straight background ramp; 16..255 reuse hue (a&7) and brighten on bit 3 — so an
- * OR-accumulated colour byte renders brighter the more (and higher) bits it carries.
+ * Indices 0..15 are the straight background ramp; 16..255 reuse hue (a&7) and brighten on bit 3. Kept as
+ * the verified reference of the original DAC table (the FC picture's `backpal` feeds it).
  */
 export function buildGlenzPalette(backpal: Uint8Array): Uint8Array {
   const pal = new Uint8Array(PAL_BYTES);
@@ -73,7 +77,7 @@ export function faceBrightness(cross: number, lightshift: number): number {
   return v;
 }
 
-/** Count set bits in a byte (coverage = number of overlapping faces, as OR-accumulated by the fill). */
+/** Count set bits in a byte. */
 function popcount8(a: number): number {
   let n = 0;
   let v = a & 0xff;
@@ -85,45 +89,43 @@ function popcount8(a: number): number {
 }
 
 /**
- * The glenz *render* palette: a 256-entry 6-bit VGA LUT keyed by the additive fill's OR-accumulated colour
- * byte. The original brightened overlaps by reprogramming the VGA DAC per face from each face's brightness
- * (demo_glz); a static index->colour LUT can't do that, so for the web port we brighten by *coverage* —
- * the more faces overlap (the more bits set), the brighter and glassier the pixel — which reproduces the
- * additive glass look the part is known for. The hue runs the copper red base (bit-0 group) up to a cool
- * blue-white glenz highlight as coverage rises; bit 3 (the demo_glz "lit" bit) adds a fixed lift.
- * DOCUMENTED COMPROMISE (see STATUS): faithful to the observable look, not to the per-face DAC writes.
+ * The glenz *render* palette, keyed by the additive fill's byte = `fcIndex | glenzBits`.
+ *
+ * Bits 0..3 carry the FC backdrop index (the picture only uses indices 0..14); the glenz fill ORs further
+ * colour bits (render.ts: a per-face slot bit plus bit 3, the demo_glz "lit" bit) over them. A pixel the
+ * glenz solids never touch keeps its FC byte and renders the FC picture colour verbatim from `backpal`;
+ * where the solids overlap, the extra set bits raise the pixel toward a cool blue-white glass highlight —
+ * the additive/transparent glenz look. This stands in for the original per-face DAC reprogramming
+ * (VEC.ASM demo_glz), which a static LUT cannot reproduce (see STATUS); it is faithful to the observable
+ * look, with the genuine FC backdrop underneath (replacing the earlier procedural copper-bar stub).
+ *
+ * `backpal` is the FC picture's own 16-colour 6-bit ramp (fc-picture.ts fcBackpal).
  */
-export function buildGlenzRenderPalette(): Uint8Array {
+export function buildGlenzRenderPalette(backpal: Uint8Array): Uint8Array {
   const pal = new Uint8Array(PAL_BYTES);
   for (let a = 0; a < 256; a++) {
-    const cover = popcount8(a & 0x07) + popcount8(a & 0xf0); // coverage bits (exclude the lit bit 3)
-    const lit = a & 0x08 ? 1 : 0;
-    // t in 0..1: how glassy/bright this pixel is.
-    const t = Math.min(1, (cover + lit) / 5);
-    // Copper-red base warming to a blue-white glenz highlight.
-    const r = Math.round(12 + t * 51);
-    const g = Math.round(t * t * 55);
-    const b = Math.round(t * 63);
-    pal[a * 3] = Math.min(63, a === 0 ? 0 : r);
-    pal[a * 3 + 1] = Math.min(63, a === 0 ? 0 : g);
-    pal[a * 3 + 2] = Math.min(63, a === 0 ? 0 : b);
+    // FC backdrop base colour (the low nibble selects one of the 16 picture colours).
+    const base = a & 0x0f;
+    const br = backpal[base * 3] ?? 0;
+    const bg = backpal[base * 3 + 1] ?? 0;
+    const bb = backpal[base * 3 + 2] ?? 0;
+
+    // Glenz coverage: bits above the FC nibble (4..7) plus the lit bit (3). The more set, the glassier.
+    const cover = popcount8(a & 0xf0) + (a & 0x08 ? 1 : 0);
+    // t in 0..1: how much glass highlight to add over the FC base.
+    const t = Math.min(1, cover / 4);
+
+    // Blend the FC base toward a cool blue-white glenz highlight as coverage rises.
+    const hr = 24 + t * 39;
+    const hg = t * t * 55;
+    const hb = t * 63;
+    const r = Math.round(br * (1 - t) + Math.max(br, hr) * t);
+    const g = Math.round(bg * (1 - t) + Math.max(bg, hg) * t);
+    const b = Math.round(bb * (1 - t) + Math.max(bb, hb) * t);
+
+    pal[a * 3] = Math.min(63, r);
+    pal[a * 3 + 1] = Math.min(63, g);
+    pal[a * 3 + 2] = Math.min(63, b);
   }
   return pal;
-}
-
-/**
- * A procedural copper-bar background for the 320x200 field (the FC picture is deferred). Returns an 8-bit
- * index buffer whose per-scanline value walks the low copper-ramp indices, giving the moving colour bands
- * the glenz solids are composited over. `phase` shifts the bars (animate it from the music clock).
- */
-export function buildCopperBackground(width: number, height: number, phase: number): Uint8Array {
-  const bg = new Uint8Array(width * height);
-  for (let y = 0; y < height; y++) {
-    // A smooth triangular ramp over the low indices 1..7 (the copper red gradient); bit 3 unset so the
-    // glenz fill's lit bit still reads as a brightness lift over the background.
-    const t = Math.abs(((((y * 2 + phase) % 256) + 256) % 256) - 128) / 128; // 0..1 triangle
-    const idx = 1 + Math.min(6, Math.round(t * 6));
-    bg.fill(idx, y * width, y * width + width);
-  }
-  return bg;
 }
