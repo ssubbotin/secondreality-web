@@ -15,4 +15,6 @@ export { Plasma } from './plasma/plasma.js';
 export { Plasmacube } from './plasmacube/plasmacube.js';
 export { Rotozoomer } from './rotozoomer/rotozoomer.js';
 export { TechnoBars } from './techno-bars/techno-bars.js';
+export { Vector1 } from './vector1/vector1.js';
+export { Vector2 } from './vector2/vector2.js';
 export { Water } from './water/water.js';

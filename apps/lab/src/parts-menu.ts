@@ -20,7 +20,7 @@ const PARTS: readonly Part[] = [
   { n: 5, name: 'Dot tunnel', effect: 'dottunnel' },
   { n: 6, name: 'Techno bars', effect: 'techno' },
   { n: 7, name: 'Panic fake', effect: 'panic' },
-  { n: 8, name: 'Vector I — Space battle', effect: null },
+  { n: 8, name: 'Vector I — Space battle', effect: 'vector1' },
   { n: 9, name: 'Mirror-ball water scroll', effect: 'water' },
   { n: 10, name: 'Desert Dream stars', effect: 'ddstars' },
   { n: 11, name: 'Lens', effect: 'lens' },
@@ -30,7 +30,7 @@ const PARTS: readonly Part[] = [
   { n: 15, name: 'MiniVectorBalls', effect: 'minivectorballs' },
   { n: 16, name: 'Mountain scroller', effect: 'forest' },
   { n: 17, name: '3D Sinus field', effect: 'comanche' },
-  { n: 18, name: 'Vector II — City', effect: null },
+  { n: 18, name: 'Vector II — City', effect: 'vector2' },
   { n: 19, name: 'End picture flash', effect: 'endpic' },
   { n: 20, name: 'Credits / greetings', effect: 'credits' },
 ];

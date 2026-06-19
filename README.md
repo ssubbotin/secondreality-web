@@ -11,12 +11,16 @@ AudioWorklet as the master clock · Vite (Rolldown) · pnpm workspace.
 **▶ Live demo — [secondreality-web.surge.sh](https://secondreality-web.surge.sh)**
 (single-effect preview: Techno bars — press ▶ play to start the audio-driven clock).
 
-> **Status: foundation complete, 18 of 20 effects shipped.** The runtime spine — renderer, the libopenmpt
-> master clock, the four-channel music-sync reconstruction, and the typed `Effect` ABI — is in place, as are
-> the asset pipelines (`.U`/`.UH` and ILBM `.LBM` VGA-picture decoders plus a bitmap-font text layer).
-> Eighteen of the twenty effects are faithful and merged; only the two baked 3D vector scenes (Vector Part I
-> — Space battle, and Vector Part II — KewlComplex city) remain, pending a 3D-model/animation extraction
-> step.
+> **Status: all 20 effects shipped.** The runtime spine — renderer, the libopenmpt master clock, the
+> four-channel music-sync reconstruction, and the typed `Effect` ABI — and the asset pipelines (`.U`/`.UH`
+> and ILBM `.LBM` VGA-picture decoders, a bitmap-font text layer, and a VISU 3D-vector decoder) are all in
+> place, and every one of the twenty parts is implemented and merged — each ported from the original source
+> with the authentic ↔ modern toggle. Known follow-ups: the Vector Part II city renders the `CITY.ASC`
+> geometry subset (the denser final-scene buildings and the FC-logo finale live in still-undecoded binary
+> object chunks `U2E.003..042`); most parts' background/overlay pictures and per-object animation are
+> deferred to the sequencer; the `modern` look of several raster parts is currently a smooth upscale of the
+> authentic CPU raster rather than a distinct GPU path; and the full sequenced demo app (`apps/demo`) and
+> per-part music-synced cue offsets remain future work.
 
 ## Quick start
 
@@ -45,7 +49,7 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 5 | **Dot tunnel** | `TUNNELI` | Concentric dot rings receding on a sine-driven delayed-camera path (CPU raster) | ✅ |
 | 6 | **Techno bars** | `TECHNO` | Fullscreen raster — rotated-coordinate interference + plane accumulation | ✅ |
 | 7 | **Panic fake** | `PANIC` | Fake-crash gag — picture wash / collapse / wipe (frame-counted) | ✅ |
-| 8 | Vector Part I — Space battle | `VISU → U2A` | Baked 3D vector scene (glTF + animation track) | ⬜ |
+| 8 | **Vector Part I — Space battle** | `VISU → U2A` | 3D vector ships + the verbatim U2A camera/animation stream | ✅ |
 | 9 | **Mirror-ball water scroll** | `WATER` | Raytraced background + per-scanline water ripple + scroller | ✅ |
 | 10 | **Desert Dream stars** | `DDSTARS` | Procedural 3D star field — reciprocal-depth projection, depth-banded brightness, delayed mirror | ✅ |
 | 11 | **Lens** | `LENS` | Per-pixel magnifying-lens displacement of a VGA picture | ✅ |
@@ -55,11 +59,11 @@ Legend: ✅ shipped & faithful · 🚧 in progress · ⬜ planned
 | 15 | **MiniVectorBalls** | `DOTS` | Procedural ball fountain — fixed-point phase machine, gravity + bounce | ✅ |
 | 16 | **Mountain scroller** | `FOREST` | Parallax bitmap scroll (ILBM layers + scroll-path data) | ✅ |
 | 17 | **3D Sinus field ("Comanche")** | `COMAN` | Forward voxel-terrain raster over a sine-driven heightfield | ✅ |
-| 18 | Vector Part II — KewlComplex city | `VISU → U2E` | Baked 3D vector scene (glTF + animation track) | ⬜ |
+| 18 | **Vector Part II — KewlComplex city** | `VISU → U2E` | 3D city flythrough — real U2E camera stream + `CITY.ASC` geometry | ✅ |
 | 19 | **End picture flash** | `ENDPIC` | White-flash fade into a decoded VGA title picture (`.U`/RLE pipeline) | ✅ |
 | 20 | **Credits / greetings scroll** | `CREDITS` / `ENDSCRL` | Bitmap-font vertical text scroller (`ENDSCROL.TXT`) | ✅ |
 
-**18 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
+**20 / 20 shipped.** The five rendering technique classes (fullscreen raster, feedback/ping-pong, real-time
 3D vector, particle/dot systems, 2D scrollers) are detailed in the design spec under
 `docs/superpowers/specs/`.
 
@@ -78,9 +82,9 @@ and the design spec.
 packages/engine   @sr/engine  — renderer, audio master clock, four-channel sync, Effect ABI, math, the
                                 picture asset pipeline (.U/.UH + ILBM decoders + loader) in src/assets,
                                 and the bitmap-font text layer in src/text
-packages/parts    @sr/parts   — the demo effects (alku1, alku2, alku3, glenz, dot-tunnel, techno-bars,
-                                panic, ddstars, lens, rotozoomer, plasma, plasmacube, minivectorballs,
-                                forest, comanche, water, credits, endpic)
+packages/parts    @sr/parts   — all 20 demo effects (alku1/2/3, glenz, dot-tunnel, techno-bars, panic,
+                                vector1, ddstars, lens, rotozoomer, plasma, plasmacube, minivectorballs,
+                                forest, comanche, vector2, water, credits, endpic)
 apps/lab          @sr/lab     — Vite host that mounts a single effect for development
 docs/superpowers  design spec, per-effect plans, and handoff/status notes
 ```

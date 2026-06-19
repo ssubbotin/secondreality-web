@@ -17,6 +17,8 @@ import {
   Plasmacube,
   Rotozoomer,
   TechnoBars,
+  Vector1,
+  Vector2,
   Water,
 } from '@sr/parts';
 
@@ -64,6 +66,8 @@ export const EFFECTS: Record<string, EffectDef> = {
   alku3: { label: 'Opening texts III', create: () => new Alku3(), moduleUrl: MUSIC0, seek: 0 },
   water: { label: 'Water scroll', create: () => new Water(), moduleUrl: MUSIC0, seek: 0 },
   credits: { label: 'Credits scroll', create: () => new Credits(), moduleUrl: MUSIC1, seek: 0 },
+  vector1: { label: 'Space battle', create: () => new Vector1(), moduleUrl: MUSIC0, seek: 0 },
+  vector2: { label: 'KewlComplex city', create: () => new Vector2(), moduleUrl: MUSIC0, seek: 0 },
 };
 
 export const DEFAULT_EFFECT = 'techno';
