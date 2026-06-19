@@ -3,16 +3,32 @@ import { LinearFilter, NearestFilter } from 'three';
 import { RasterSurface } from './nodes.js';
 import { buildStarPalette } from './palette.js';
 import { SCREEN_H, SCREEN_W, StarRaster } from './raster.js';
+import {
+  advanceReveal,
+  compositeReveal,
+  createRevealState,
+  type RevealState,
+  scheduleReveal,
+  TEXTPIC_DATA_OFFSET,
+} from './reveal.js';
 import { createStarState, palfadeScale, type StarState, stepStars } from './star-sim.js';
 import { buildMuldivX, buildMuldivY } from './tables.js';
+import { type DecodedTextpic, decodeTextpic } from './textpic.js';
 
 /** authentic = chunky 320×200 nearest upscale; modern = smooth LinearFilter upscale (default). */
 export type LookMode = 'authentic' | 'modern';
 
+/** Vendored DDSTARS overlay art — the `_textpic` "Desert Dream" text/picture (TEXTS.16). */
+const TEXTPIC_URL = '/pics/TEXTS.16';
+
 const SIM_HZ = 70; // original mode-X frame cadence; the sim is fps-independent via the accumulator
 const SIM_DT = 1 / SIM_HZ;
-/** Self-loop cap in the lab (the original exits at its own `int 0FCh, bx=2`; we restart the field). */
-const LIFETIME = 4000;
+/**
+ * Self-loop cap in the lab (the original exits at its own `int 0FCh, bx=2`; we restart the field). Set past
+ * the second text reveal + its hold (block 2 arms at frame 3200; `startxtclose` keeps it up ~1500 ticks more)
+ * so both "Desert Dream" credit blocks fully play before the field restarts.
+ */
+const LIFETIME = 5200;
 
 export class DDStars implements Effect {
   readonly id = 'ddstars';
@@ -23,20 +39,26 @@ export class DDStars implements Effect {
   private readonly muldivy = buildMuldivY();
   private readonly palette = buildStarPalette();
   private state: StarState = createStarState();
+  private reveal: RevealState = createRevealState();
   private readonly raster = new StarRaster();
   private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
   private surface: RasterSurface | null = null;
+  private textpic: DecodedTextpic | null = null;
   private acc = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
-    // No external assets — the procedural star field is pure code. The "Desert Dream" text/picture overlay
-    // (TEXTS.LBM / PIC.EGA / PIC2.EGA) is deferred to the future image pipeline.
+    // The procedural star field is pure code; the "Desert Dream" text/picture overlay is the vendored
+    // `_textpic` art (TEXTS.16), decoded here and composited on the reveal schedule (STARS.ASM `risetext`).
+    const res = await fetch(TEXTPIC_URL);
+    if (!res.ok) throw new Error(`DDStars: failed to fetch ${TEXTPIC_URL} (HTTP ${res.status})`);
+    this.textpic = decodeTextpic(new Uint8Array(await res.arrayBuffer()));
   }
 
   init(ctx: DemoContext): void {
     this.ctx = ctx;
     this.surface = new RasterSurface(this.palette);
     this.state = createStarState();
+    this.reveal = createRevealState();
     this.raster.reset();
     this.acc = 0;
     this.applyMode();
@@ -53,14 +75,32 @@ export class DDStars implements Effect {
     this.surface?.setFilter(this.mode === 'authentic' ? NearestFilter : LinearFilter);
   }
 
+  /**
+   * Run the "Desert Dream" text/picture reveal for the current tick over the freshly rendered star frame
+   * (STARS.ASM `do_stars` `@@st1`/`@@st2` schedule + `risetext`). The original calls `risetext` *before* the
+   * star copy loops, but those loops protect the text band via the `_nostar1`/`_nostar2` clip (active in
+   * STARS.OK); the final STARS.ASM left that clip commented out. We composite the reveal *after* the star
+   * raster — the faithful visible result of the clipped copy (stars skip the text band, the text remains).
+   */
+  private applyReveal(): void {
+    const tp = this.textpic;
+    if (!tp) return;
+    scheduleReveal(this.reveal, this.state.frame);
+    const use = advanceReveal(this.reveal);
+    const srcOffset = TEXTPIC_DATA_OFFSET + this.reveal.startxtp0;
+    compositeReveal(this.index, use, srcOffset, tp.indices, tp.width, tp.height);
+  }
+
   update(frame: FrameContext): void {
     this.acc += frame.dt;
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       stepStars(this.state, this.muldivx, this.muldivy);
       this.raster.render(this.index, this.state);
+      this.applyReveal();
       if (this.state.frame >= LIFETIME) {
         this.state = createStarState();
+        this.reveal = createRevealState();
         this.raster.reset();
       }
     }

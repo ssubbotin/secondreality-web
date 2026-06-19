@@ -1,0 +1,4 @@
+# Vendored original DDSTARS assets — store byte-exact (no CRLF/text munging) so the decoder tests and the
+# runtime see the same bytes the original DOS code linked into `_textpic`.
+TEXTS.16 -text binary
+TEXTS.LBM -text binary
