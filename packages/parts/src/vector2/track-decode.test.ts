@@ -55,4 +55,22 @@ describe('decodeTrack on U2E.0AB', () => {
     expect(track.frames[0]?.on).toEqual([21]);
     expect(track.frames[track.frames.length - 1]?.on).toEqual([23]);
   });
+
+  it('snapshots each enabled object`s accumulated matrix per frame (in `on` order)', () => {
+    const f0 = track.frames[0];
+    expect(f0?.objects.map((o) => o.co)).toEqual(f0?.on);
+    const kulma = f0?.objects[0]; // kulmatalot (co 21) is static at frame 0 → identity, zero position.
+    expect(kulma?.m).toEqual([16384, 0, 0, 0, 16384, 0, 0, 0, 16384]);
+    expect([kulma?.x, kulma?.y, kulma?.z]).toEqual([0, 0, 0]);
+  });
+
+  it('decodes per-object animation: BuildingH (co 2) enters rotated + translated at frame 601', () => {
+    // BuildingH is off through frame 600, then enabled at 601 already carrying a rotation (m != identity)
+    // and a translation off origin — the rotating building of the final scene.
+    expect(track.frames[600]?.objects.some((o) => o.co === 2)).toBe(false);
+    const bh = track.frames[601]?.objects.find((o) => o.co === 2);
+    expect(bh).toBeDefined();
+    expect(bh?.m).toEqual([14670, -7295, 0, 7295, 14670, 0, 0, 0, 16384]);
+    expect([bh?.x, bh?.y, bh?.z]).toEqual([-7130, -5279, 101]);
+  });
 });
