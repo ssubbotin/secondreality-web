@@ -19,22 +19,25 @@ import {
 import { texture as textureNode, uv } from 'three/tsl';
 import {
   type RenderTarget as GpuRenderTarget,
+  RenderTarget as GpuRenderTargetImpl,
   MeshBasicNodeMaterial,
   type WebGPURenderer,
 } from 'three/webgpu';
+import { PLASMA_H, PLASMA_W, PlasmaField } from '../plasma/nodes.js';
 import { CUBE_FACES, CUBE_POINTS } from './cube.js';
-import { SCREEN_H, SCREEN_W } from './raster.js';
+import { compositeToRgb, SCREEN_H, SCREEN_W } from './raster.js';
 import { TILE_H, TILE_W } from './texture.js';
 
 const BLACK = new Color(0, 0, 0);
 
 /**
- * Authentic renderer: the CPU cube rasteriser fills a 320×200 8-bit index buffer; this surface maps it
- * through the (per-frame shaded) VGA palette (×4) into an RGBA DataTexture and blits it to the supplied
- * target. The texture data is recreated each frame (the proven cross-backend path — three's WebGL
- * backend doesn't reliably re-upload a mutated DataTexture), tagged sRGB so the 6-bit→8-bit bytes land
- * verbatim. Rows are flipped on write because the index buffer is top-row-first while three's uv origin
- * is bottom-left.
+ * Authentic renderer: the CPU rasterisers fill 320×200 8-bit index buffers (the plasma background, then
+ * the cube on top); this surface composites them in colour space — cube pixels through the cube palette
+ * where the cube drew, the plasma through the plasma palette everywhere else (MAIN.C plz() then vect()).
+ * The result is mapped (×4) into an RGBA DataTexture and blitted to the supplied target. The texture data
+ * is recreated each frame (the proven cross-backend path — three's WebGL backend doesn't reliably
+ * re-upload a mutated DataTexture), tagged sRGB so the 6-bit→8-bit bytes land verbatim. Row 0 of the index
+ * buffer is screen-top and is written verbatim to row 0 of the texture (no vertical flip).
  */
 export class RasterSurface {
   private readonly rgba = new Uint8Array(SCREEN_W * SCREEN_H * 4);
@@ -63,21 +66,37 @@ export class RasterSurface {
     this.tex.needsUpdate = true;
   }
 
-  /** Map the index buffer through `palette` (256×RGB, 0..63) into the RGBA texture (flipped, ×4). */
+  /** Map a single index buffer through `palette` (256×RGB, 0..63) into the RGBA texture (row 0 = top, ×4). */
   update(index: Uint8Array, palette: Uint8Array): void {
-    for (let row = 0; row < SCREEN_H; row++) {
-      const src = row * SCREEN_W;
-      const dst = row * SCREEN_W;
-      for (let col = 0; col < SCREEN_W; col++) {
-        const c = index[src + col] ?? 0;
-        const d = (dst + col) * 4;
-        this.rgba[d] = (palette[c * 3] ?? 0) * 4;
-        this.rgba[d + 1] = (palette[c * 3 + 1] ?? 0) * 4;
-        this.rgba[d + 2] = (palette[c * 3 + 2] ?? 0) * 4;
-        this.rgba[d + 3] = 255;
-      }
+    for (let i = 0; i < SCREEN_W * SCREEN_H; i++) {
+      const c = index[i] ?? 0;
+      const d = i * 4;
+      this.rgba[d] = (palette[c * 3] ?? 0) * 4;
+      this.rgba[d + 1] = (palette[c * 3 + 1] ?? 0) * 4;
+      this.rgba[d + 2] = (palette[c * 3 + 2] ?? 0) * 4;
+      this.rgba[d + 3] = 255;
     }
-    // Recreate the texture so the WebGL backend re-uploads (mirrors plasma's setPalettes discipline).
+    this.reupload();
+  }
+
+  /**
+   * Composite the cube over the plasma background: where the cube buffer holds CUBE_TRANSPARENT the
+   * plasma index (through `plasmaPalette`) shows through; everywhere else the cube index (through
+   * `cubePalette`) wins (MAIN.C plz() background, then vect() cube on top). Both buffers are 320×200,
+   * row 0 = screen top, no vertical flip.
+   */
+  composite(
+    plasma: Uint8Array,
+    plasmaPalette: Uint8Array,
+    cube: Uint8Array,
+    cubePalette: Uint8Array,
+  ): void {
+    compositeToRgb(plasma, plasmaPalette, cube, cubePalette, this.rgba);
+    this.reupload();
+  }
+
+  /** Recreate the texture so the WebGL backend re-uploads (mirrors plasma's setPalettes discipline). */
+  private reupload(): void {
     const old = this.tex;
     this.tex = this.makeTexture();
     this.blit.setSource(this.tex);
@@ -199,11 +218,24 @@ export class CubeMesh {
     this.mesh.matrix.copy(matrix);
   }
 
-  render(renderer: WebGPURenderer, target: GpuRenderTarget): void {
+  /**
+   * Render the cube into `target`. When `overBackground` is set the colour buffer is preserved (the
+   * plasma background was already drawn into the target) and only depth is cleared, so the cube
+   * composites on top — MAIN.C vect() drawing over the plz() plasma. Otherwise the target is cleared to
+   * black first (the cube alone).
+   */
+  render(renderer: WebGPURenderer, target: GpuRenderTarget, overBackground = false): void {
     renderer.setRenderTarget(target);
-    renderer.setClearColor(BLACK, 1);
-    renderer.clear();
+    const prevAutoClear = renderer.autoClear;
+    if (overBackground) {
+      renderer.autoClear = false;
+      renderer.clearDepth();
+    } else {
+      renderer.setClearColor(BLACK, 1);
+      renderer.clear();
+    }
     renderer.render(this.scene, this.camera);
+    renderer.autoClear = prevAutoClear;
     renderer.setRenderTarget(null);
   }
 
@@ -211,5 +243,54 @@ export class CubeMesh {
     this.geometry.dispose();
     this.material.dispose();
     this.atlas.dispose();
+  }
+}
+
+/**
+ * Modern background: the already-shipped GPU plasma field (packages/parts/src/plasma) rendered fullscreen
+ * behind the cube. Owns a plasma field node + its render target + a blit; the Effect feeds it the same
+ * moveplz phase + plasma palette the authentic CPU background uses, then this draws it into the cube's
+ * output target before the cube composites on top (MAIN.C plz() copper background, then vect()).
+ */
+export class CubeBackground {
+  private readonly field = new PlasmaField();
+  private readonly fieldTarget = new GpuRenderTargetImpl(PLASMA_W, PLASMA_H);
+  private readonly blit = new Blit();
+
+  constructor() {
+    this.blit.setSource(this.fieldTarget.texture);
+    this.fieldTarget.texture.minFilter = LinearFilter;
+    this.fieldTarget.texture.magFilter = LinearFilter;
+    this.fieldTarget.texture.needsUpdate = true;
+  }
+
+  /** Set the section-0 plasma palette pair (no cross-fade — the cube part uses the RGB palette). */
+  setPalette(rgb: Uint8Array): void {
+    this.field.setPalettes(rgb, rgb);
+    this.field.setFade(1);
+  }
+
+  /** Advance the field phase for this frame (k/l param sets from moveplz/moveplzL). */
+  setPhase(
+    k: readonly [number, number, number, number],
+    l: readonly [number, number, number, number],
+  ): void {
+    this.field.setPhase(k, l);
+  }
+
+  /** Render the plasma field, then blit it fullscreen into `target` (the cube draws on top after). */
+  render(renderer: WebGPURenderer, target: GpuRenderTarget): void {
+    this.field.render(renderer, this.fieldTarget); // plasma → 320×280 field
+    renderer.setRenderTarget(target);
+    renderer.setClearColor(BLACK, 1);
+    renderer.clear();
+    this.blit.render(renderer);
+    renderer.setRenderTarget(null);
+  }
+
+  dispose(): void {
+    this.field.dispose();
+    this.fieldTarget.dispose();
+    this.blit.dispose();
   }
 }

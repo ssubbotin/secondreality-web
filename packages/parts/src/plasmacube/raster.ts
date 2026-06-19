@@ -170,12 +170,18 @@ function fillBlock(
 }
 
 /**
- * Rasterise the whole cube: clear, then draw each visible face's quad with its shaded tile band. The
- * caller supplies the three pre-shaded tile bands (one per face color) and the dist map; `dd` is
- * frames&63. Faces are drawn in sortFaces order (front-to-back is irrelevant — the cube is convex and
- * back faces are culled, so visible faces never overlap).
+ * Index value the plasma-behind composite fills the cube buffer with before drawing: a marker meaning
+ * "the cube did not draw here". The cube tiles only ever produce 32..191 (texture.ts), so 0xFF is never
+ * a cube pixel and is safe as the transparent sentinel.
  */
-export function rasterCube(
+export const CUBE_TRANSPARENT = 0xff;
+
+/**
+ * Draw each visible face's quad with its shaded tile band into `out` WITHOUT clearing — the caller owns
+ * the background (the plasma, or a sentinel fill). Faces are drawn in sortFaces order (front-to-back is
+ * irrelevant — the cube is convex and back faces are culled, so visible faces never overlap).
+ */
+export function drawCubeFaces(
   out: Uint8Array,
   pts: readonly ProjectedPoint[],
   visible: readonly VisibleFace[],
@@ -183,7 +189,6 @@ export function rasterCube(
   dist: Int8Array,
   dd: number,
 ): void {
-  out.fill(0);
   for (const vf of visible) {
     const face = CUBE_FACES[vf.faceIndex];
     if (!face) continue;
@@ -195,5 +200,68 @@ export function rasterCube(
     if (quad.length !== 4) continue;
     const tile = tiles[face.color] ?? tiles[0];
     drawPoly(out, quad, tile, dist, dd);
+  }
+}
+
+/**
+ * Rasterise the whole cube into a fresh buffer: clear to 0, then draw each visible face. The caller
+ * supplies the three pre-shaded tile bands (one per face color) and the dist map; `dd` is frames&63.
+ */
+export function rasterCube(
+  out: Uint8Array,
+  pts: readonly ProjectedPoint[],
+  visible: readonly VisibleFace[],
+  tiles: readonly [Uint8Array, Uint8Array, Uint8Array],
+  dist: Int8Array,
+  dd: number,
+): void {
+  out.fill(0);
+  drawCubeFaces(out, pts, visible, tiles, dist, dd);
+}
+
+/**
+ * Rasterise the cube ON TOP of the plasma background (MAIN.C plz() then vect(): the cube overdraws the
+ * plasma where its faces cover, the plasma shows through everywhere else). The cube faces are drawn into
+ * a separate index buffer pre-filled with CUBE_TRANSPARENT so the composite step can keep each layer's
+ * own palette (the plasma palette and the cube palette index-collide; compositing in colour space is the
+ * faithful equivalent of the original's two sequential passes sharing the VGA buffer).
+ */
+export function rasterCubeBuffer(
+  cubeBuf: Uint8Array,
+  pts: readonly ProjectedPoint[],
+  visible: readonly VisibleFace[],
+  tiles: readonly [Uint8Array, Uint8Array, Uint8Array],
+  dist: Int8Array,
+  dd: number,
+): void {
+  cubeBuf.fill(CUBE_TRANSPARENT);
+  drawCubeFaces(cubeBuf, pts, visible, tiles, dist, dd);
+}
+
+/**
+ * Composite the cube layer over the plasma background into an RGBA buffer (×4 VGA-DAC scaling): where the
+ * cube buffer is CUBE_TRANSPARENT the plasma index goes through `plasmaPalette`, otherwise the cube index
+ * goes through `cubePalette`. This is the colour-space equivalent of the original's two sequential VGA
+ * passes (plz() then vect()); the cube ALWAYS wins where it drew. Pure (no GPU) so the ordering is
+ * unit-testable; RasterSurface.composite uses the same rule for the on-screen path.
+ */
+export function compositeToRgb(
+  plasma: Uint8Array,
+  plasmaPalette: Uint8Array,
+  cube: Uint8Array,
+  cubePalette: Uint8Array,
+  rgba: Uint8Array,
+): void {
+  const n = Math.min(plasma.length, cube.length, rgba.length >> 2);
+  for (let i = 0; i < n; i++) {
+    const cc = cube[i] ?? CUBE_TRANSPARENT;
+    const transparent = cc === CUBE_TRANSPARENT;
+    const c = transparent ? (plasma[i] ?? 0) : cc;
+    const pal = transparent ? plasmaPalette : cubePalette;
+    const d = i * 4;
+    rgba[d] = (pal[c * 3] ?? 0) * 4;
+    rgba[d + 1] = (pal[c * 3 + 1] ?? 0) * 4;
+    rgba[d + 2] = (pal[c * 3 + 2] ?? 0) * 4;
+    rgba[d + 3] = 255;
   }
 }
