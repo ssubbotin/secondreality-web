@@ -48,7 +48,7 @@ export class RasterSurface {
     const pal = this.palette;
     for (let row = 0; row < SCREEN_H; row++) {
       const src = row * SCREEN_W;
-      const dst = (SCREEN_H - 1 - row) * SCREEN_W; // flip vertically
+      const dst = row * SCREEN_W;
       for (let col = 0; col < SCREEN_W; col++) {
         const c = index[src + col] ?? 0;
         const d = (dst + col) * 4;

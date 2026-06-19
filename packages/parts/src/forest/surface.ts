@@ -46,7 +46,7 @@ export class ForestSurface {
     const { rgba, palette6 } = this;
     for (let row = 0; row < SCREEN_H; row++) {
       const src = row * SCREEN_W;
-      const dst = (SCREEN_H - 1 - row) * SCREEN_W; // flip vertically
+      const dst = row * SCREEN_W;
       for (let col = 0; col < SCREEN_W; col++) {
         const c = index[src + col] ?? 0;
         const d = (dst + col) * 4;
@@ -61,7 +61,7 @@ export class ForestSurface {
 
   /** Read the expanded sRGB RGBA at (col, row) from the top-left origin (for tests / debug). */
   pixelAt(col: number, row: number): [number, number, number, number] {
-    const d = ((SCREEN_H - 1 - row) * SCREEN_W + col) * 4; // mirror the vertical flip
+    const d = (row * SCREEN_W + col) * 4;
     return [this.rgba[d] ?? 0, this.rgba[d + 1] ?? 0, this.rgba[d + 2] ?? 0, this.rgba[d + 3] ?? 0];
   }
 

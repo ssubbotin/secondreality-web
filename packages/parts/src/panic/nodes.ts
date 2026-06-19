@@ -59,7 +59,7 @@ export class CrashSurface {
     const lut = this.lut;
     for (let row = 0; row < MONSTER_H; row++) {
       const src = row * MONSTER_W;
-      const dst = (MONSTER_H - 1 - row) * MONSTER_W; // flip vertically
+      const dst = row * MONSTER_W;
       for (let col = 0; col < MONSTER_W; col++) {
         const c = (index[src + col] ?? 0) * 4;
         const d = (dst + col) * 4;

@@ -50,7 +50,7 @@ export class RasterSurface {
   update(index: Uint8Array): void {
     for (let row = 0; row < FIELD_H; row++) {
       const src = row * FIELD_W;
-      const dst = (FIELD_H - 1 - row) * FIELD_W; // flip vertically
+      const dst = row * FIELD_W;
       for (let col = 0; col < FIELD_W; col++) {
         const c = index[src + col] ?? 0;
         const d = (dst + col) * 4;

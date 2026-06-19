@@ -58,7 +58,7 @@ export class PictureSurface {
     const indices = this.indices;
     for (let row = 0; row < height; row++) {
       const src = row * width;
-      const dst = (height - 1 - row) * width; // flip vertically
+      const dst = row * width; // index buffer is top-first; the blit pipeline maps texture row 0 -> screen top
       for (let col = 0; col < width; col++) {
         const c = indices[src + col] ?? 0;
         const d = (dst + col) * 4;
@@ -73,7 +73,7 @@ export class PictureSurface {
 
   /** Read the current expanded sRGB RGBA at (col, row) from the top-left origin (for tests/debug). */
   pixelAt(col: number, row: number): [number, number, number, number] {
-    const d = ((this.height - 1 - row) * this.width + col) * 4; // mirror the vertical flip
+    const d = (row * this.width + col) * 4;
     return [this.rgba[d] ?? 0, this.rgba[d + 1] ?? 0, this.rgba[d + 2] ?? 0, this.rgba[d + 3] ?? 0];
   }
 
