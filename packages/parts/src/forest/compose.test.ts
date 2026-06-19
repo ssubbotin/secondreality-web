@@ -73,14 +73,26 @@ describe('stampPhase (Putrouts additive blit)', () => {
     expect(screen[0]).toBe(7);
   });
 
-  it('clamps the additive sum to 255', () => {
+  it('wraps the additive sum mod 256 (ROUTINES.ASM unsaturated byte add)', () => {
     const screen = new Uint8Array(2);
     screen[0] = 200;
     const pos = fakePos([{ dests: [0] }]);
     const font = new Uint8Array(POS_ENTRIES);
-    font[0] = 200; // 200 + 200 = 400 → clamp 255
+    font[0] = 200; // 200 + 200 = 400 → (400 & 0xff) = 144
     stampPhase(screen, font, pos);
-    expect(screen[0]).toBe(255);
+    expect(screen[0]).toBe(144);
+  });
+
+  it('matches an 8-bit wrap where a bright background overlaps lit text', () => {
+    // Lake-edge highlight (≈126) + biased text (≈134) = 260 → wraps to 4 (dark band), the speckled
+    // shimmer the original shows on the rippling water.
+    const screen = new Uint8Array(2);
+    screen[0] = 126;
+    const pos = fakePos([{ dests: [0] }]);
+    const font = new Uint8Array(POS_ENTRIES);
+    font[0] = 134;
+    stampPhase(screen, font, pos);
+    expect(screen[0]).toBe(4);
   });
 });
 
