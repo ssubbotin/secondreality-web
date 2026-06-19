@@ -32,11 +32,43 @@ function runColumn(si: number, di: number, xs1: number, ys1: number): number[] {
 }
 
 describe('comanche raster (THELOOP voxel walk)', () => {
-  it('rasterColumn reproduces the THELOOP.INC register emulation byte-for-byte (5 oracle columns)', () => {
+  it('rasterColumn reproduces the THELOOP.INC register emulation byte-for-byte (oracle columns)', () => {
     for (const c of oracle) {
       const [si, di, xs1, ys1] = c.in;
       expect(runColumn(si, di, xs1, ys1)).toEqual(c.col);
     }
+  });
+
+  it('the field is smooth rolling hills — no spurious tall single-column spikes', () => {
+    // Regression for the carry-drop spike bug: THELOOP.INC's `_@seek2a` (2-row hit) and the sina2
+    // `_@seeko` exit are add-WITH-carry (`adc`); a plain `add` that dropped the carry-out left a column's
+    // ray slope one fixed-point unit too shallow so the ray never cleared the terrain and the column
+    // over-filled dozens of rows, sticking a tall 1px-wide spike above the smooth hills. The original
+    // cannot do this: adjacent columns sample neighbouring heightfield cells, so the terrain top (first
+    // lit row) varies only gently across the screen.
+    const out = new Uint8Array(FIELD_W * FIELD_H);
+    const s = createFieldState();
+    for (let i = 0; i < 60; i++) stepField(s, sin1024);
+    rasterField(out, s, heightX, heightY, off);
+    const tops: number[] = [];
+    for (let x = 0; x < FIELD_W; x++) {
+      let top = FIELD_H;
+      for (let y = 0; y < FIELD_H; y++) {
+        if ((out[y * FIELD_W + x] ?? 0) !== 0) {
+          top = y;
+          break;
+        }
+      }
+      tops.push(top);
+    }
+    // No column's terrain top juts more than a few rows above either neighbour (a spike would jut tens).
+    let maxJut = 0;
+    for (let x = 1; x < FIELD_W - 1; x++) {
+      const cur = tops[x] ?? FIELD_H;
+      const lo = Math.min(tops[x - 1] ?? FIELD_H, tops[x + 1] ?? FIELD_H);
+      maxJut = Math.max(maxJut, lo - cur);
+    }
+    expect(maxJut).toBeLessThanOrEqual(8);
   });
 
   it('a flat field is sky (0) up top and solid terrain at the bottom', () => {

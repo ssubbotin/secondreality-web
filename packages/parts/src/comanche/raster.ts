@@ -47,6 +47,12 @@ function add32(a: number, b: number): [number, number] {
   const s = (a >>> 0) + (b >>> 0);
   return [s >>> 0, s > 0xffffffff ? 1 : 0];
 }
+// 32-bit add-with-carry — models `adc r32,src`: sum = a + b + carry-in, with its own carry-out. The
+// carry-in MUST be threaded from the preceding add (dropping it is the spurious-spike bug — see below).
+function adc32(a: number, b: number, cf: number): [number, number] {
+  const s = (a >>> 0) + (b >>> 0) + cf;
+  return [s >>> 0, s > 0xffffffff ? 1 : 0];
+}
 // `adc ax,imm` — add into the low 16 bits only (with carry-in); the high word is untouched.
 function adcLow16(eax: number, imm: number, cf: number): number {
   const low = (eax & 0xffff) + (imm & 0xffff) + cf;
@@ -95,9 +101,10 @@ export function rasterColumn(
     bx = s16(bx + (off[j] ?? 0));
     let ax = s16(eax & 0xffff);
     if (ax >= bx) {
+      // THELOOP.INC `_@seeko`: `add eax,ecx` then (sina2 only) `adc eax,ecx` — the second is add-with-carry.
       let cf: number;
       [eax, cf] = add32(eax, ecx);
-      if (sina === 2) [eax, cf] = add32(eax, ecx);
+      if (sina === 2) [eax, cf] = adc32(eax, ecx, cf);
       eax = adcLow16(eax, 0xffff, cf); // adc ax,-1
       j += sina === 2 ? 2 : 1;
       continue;
@@ -126,9 +133,15 @@ export function rasterColumn(
       if (row - 1 >= 0 && row - 1 <= 199) out[(row - 1) * FIELD_W] = dl;
       ax = s16(eax & 0xffff);
       if (ax >= bx) {
+        // THELOOP.INC `_@seek2a`: `add ecx,2560` (sets CF) then falls into `_@seek1a`'s `adc ecx,2560`
+        // — the SECOND add is add-with-carry, so the carry-out of the first must be threaded in. The
+        // original earlier code dropped it with a plain `add32`, occasionally leaving the ray slope one
+        // fixed-point unit too shallow so the ray never cleared the terrain → one column filled dozens
+        // of extra rows (a tall single-column spike).
+        let cfA: number;
         let cf2: number;
-        [ecx] = add32(ecx, L_2560);
-        [ecx, cf2] = add32(ecx, L_2560);
+        [ecx, cfA] = add32(ecx, L_2560);
+        [ecx, cf2] = adc32(ecx, L_2560, cfA);
         ecx = adcLow16(ecx, 0, cf2);
         row -= 2;
         break;
@@ -143,9 +156,10 @@ export function rasterColumn(
       ax = s16(eax & 0xffff);
       if (ax >= bx) break;
     }
+    // THELOOP.INC `_@seeko`: `add eax,ecx` then (sina2 only) `adc eax,ecx` — the second is add-with-carry.
     let cf4: number;
     [eax, cf4] = add32(eax, ecx);
-    if (sina === 2) [eax, cf4] = add32(eax, ecx);
+    if (sina === 2) [eax, cf4] = adc32(eax, ecx, cf4);
     eax = adcLow16(eax, 0xffff, cf4);
     j += sina === 2 ? 2 : 1;
   }
