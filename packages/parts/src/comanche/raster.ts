@@ -102,8 +102,11 @@ export function rasterColumn(
       j += sina === 2 ? 2 : 1;
       continue;
     }
-    // HIT — shade by terrain height; /2 maps into the palette ramp.
-    const dl = ((u16(bx + (COLOR_BASE - (j >> 3))) >> 1) & 0xff) >>> 0;
+    // HIT — shade by terrain height (THELOOP.INC: `lea dx,[bx+140-j/8]` then `shr dl,1`). The original
+    // shifts the LOW BYTE `dl`, so the +(140−j/8) sum is masked to 8 bits BEFORE the >>1 (range 0..127);
+    // only `dl` is stored (`mov es:[bp],dl`). Masking after the shift would wrong-foot the shade into the
+    // flat-cyan palette plateau — keep the byte mask first.
+    const dl = (((bx + (COLOR_BASE - (j >> 3))) & 0xff) >> 1) >>> 0;
     const l = wflip((j * 2560) >>> 0);
     let cf: number;
     for (;;) {

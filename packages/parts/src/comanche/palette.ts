@@ -11,11 +11,16 @@ import { buildSin1024, cdiv } from './tables.js';
  *   for a in 0..(768−48):  pal[a] = min(pal[a]·9/6, 63)      // brightness boost over indices 0..239
  *   for a in 0..23:        uc=(255−a)·3; pal[uc] = max(a−4,0)/2; green=blue=0   // the red band 232..255
  *   pal[0..2] = 0                                            // index 0 forced black
- *   for x in 720..767:  pal[x] = combg[16+x]                 // DEFERRED — the COMBG.LBM picture entries
+ *   for x in 720..767:  pal[x] = combg[16+x]                 // the COMBG.LBM picture entries (240..255)
  *
- * The final COMBG loop (palette indices 240..255) needs the not-yet-built image pipeline; it is
- * **deferred** — those entries keep their red-band procedural values (a faithful stub). All `/` are C
- * integer division. Tag the uploaded texture SRGBColorSpace so the 6-bit→8-bit (×4) bytes land verbatim.
+ * The final COMBG loop overwrites palette indices 240..255 with `combg[16+x]` (x=720..767). The original
+ * `combg[]` is the *unpacked* COMBG.UH (`lbm2u combg.lbm combg.uh`, linked via `doobj`), NOT the raw IFF
+ * LBM — its 16-byte header is followed by a 768-byte palette region that is **all zero** in this build, so
+ * those colour bytes land as black. Ported verbatim as black; this overrides the procedural red-band
+ * values the earlier loop had written into 240..255. (The 1993 COMBG backdrop body re-uses indices 0 and
+ * 225..255, so the horizon silhouette renders as faint dark-red fading to black — the backdrop blit itself
+ * is deferred; see STATUS.) All `/` are C integer division. Tag the uploaded texture SRGBColorSpace so the
+ * 6-bit→8-bit (×4) bytes land verbatim.
  */
 export function buildComanchePalette(): Uint8Array {
   const sin1024 = buildSin1024();
@@ -54,7 +59,9 @@ export function buildComanchePalette(): Uint8Array {
   p[0] = 0;
   p[1] = 0;
   p[2] = 0;
-  // DEFERRED: the COMBG.LBM-sourced entries (colour indices 240..255) are left at their red-band
-  // stub values until the image pipeline lands. See STATUS.
+  // The COMBG.LBM (unpacked COMBG.UH) palette band overwrites colour indices 240..255. That region of
+  // COMBG.UH is all zero in this build, so the bytes land as black — ported verbatim. (MAIN.C:
+  // `for(x=(256-16)*3;x<768;x++) palette[x]=combg[16+x];`.)
+  for (let x = (256 - 16) * 3; x < 768; x++) p[x] = 0;
   return p;
 }
