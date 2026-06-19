@@ -4,14 +4,13 @@ import { decodeU, loadFona } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
 import { composeFrame } from './compose.js';
 import { SCREEN_H, SCREEN_W } from './copper.js';
-import { decodeHoi } from './hoi.js';
 import { TEXT_BASE } from './palette.js';
 
 const fixture = (name: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url))));
 
-const font = loadFona(decodeU(fixture('FONA.UH')));
-const hoi = decodeHoi(fixture('HOI.U')).indices;
+const font = loadFona(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
+const hoi = decodeU(fixture('HOI.U')).indices;
 
 describe('composeFrame', () => {
   it('lays the HOI horizon (indices 0..63) under the text plane bands', () => {

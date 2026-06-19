@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { decodeU } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
-import { decodeU } from './decode-u.js';
 import { loadFona } from './font.js';
 import { centerOffset } from './layout.js';
 import { blitScanline, rasterField, SCREEN_H } from './raster.js';
@@ -10,7 +10,7 @@ import { contentHeight } from './scroll.js';
 const fixture = (name: string): Buffer =>
   readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)));
 
-const font = loadFona(decodeU(fixture('FONA.UH')));
+const font = loadFona(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
 const DST_W = 640;
 
 describe('blitScanline (do_scroll inner loop)', () => {

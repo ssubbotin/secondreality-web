@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { type BitmapFont, decodeU, loadFona } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
-import { type BitmapFont, decodeU, loadFona } from './font.js';
 import { addText, CENTER_X, inkPlaneByte, makeTextBuffer, TBUF_H, TBUF_W } from './text-buffer.js';
 
 const fixture = (name: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url))));
 
-const loadFont = (): BitmapFont => loadFona(decodeU(fixture('FONA.UH')));
+const loadFont = (): BitmapFont => loadFona(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
 
 describe('inkPlaneByte (MAIN.C:169-182 plane remap)', () => {
   it('maps the 2-bit font level to a VGA plane byte', () => {

@@ -1,6 +1,5 @@
 export { Alku3, type LookMode } from './alku3.js';
 export { backdropOffset, composeBackdrop, HOI_W, SCREEN_H, SCREEN_W } from './backdrop.js';
-export { type DecodedHoi, decodeHoi } from './hoi.js';
 export { buildAlkuPalette, lerpPalette } from './palette.js';
 export {
   FADE_STEPS,

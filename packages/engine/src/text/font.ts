@@ -1,4 +1,4 @@
-import type { DecodedU } from './decode-u.js';
+import type { DecodedU } from '../assets/decode-u.js';
 
 /**
  * One segmented glyph cell in the font sheet. `x` is the start column; the cell spans `[x, x+width)`

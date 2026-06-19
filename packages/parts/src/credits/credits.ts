@@ -1,6 +1,6 @@
 import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
+import { decodeU } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
-import { decodeU } from './decode-u.js';
 import { type BitmapFont, loadFona } from './font.js';
 import { SCREEN_W } from './layout.js';
 import { RasterSurface } from './nodes.js';
@@ -60,7 +60,9 @@ export class Credits implements Effect {
       fetchBytes(TEXT_URL, fetchImpl),
     ]);
     this.assets = {
-      font: loadFona(decodeU(fontBytes)),
+      // FONA-END.UH is the ENDSCRL glyph sheet; the web port reads its raw font body via the engine
+      // glyph-sheet path (`add*16 - 1`), the same offset the credits raster has always used.
+      font: loadFona(decodeU(fontBytes, { glyphSheet: true })),
       lines: parseScrollText(textBytes).lines,
     };
   }

@@ -1,9 +1,15 @@
-import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
+import type {
+  BitmapFont,
+  DemoContext,
+  Effect,
+  FrameContext,
+  LoadContext,
+  RenderTarget,
+} from '@sr/engine';
+import { decodeU, loadFona } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
 import { composeFrame } from './compose.js';
 import { SCREEN_H, SCREEN_W } from './copper.js';
-import { type BitmapFont, decodeU, loadFona } from './font.js';
-import { decodeHoi } from './hoi.js';
 import { RasterSurface } from './nodes.js';
 import { buildAlku2Palette } from './palette.js';
 import { CREDIT_CARDS, PER_CARD_SCROLL, scrollAt } from './scroll.js';
@@ -26,17 +32,18 @@ interface Alku2Assets {
   palette: Uint8Array;
 }
 
+/** Fetch the FONA glyph sheet and decode it through the engine glyph-sheet path (`add*16 - 1`). */
 async function fetchU(url: string): Promise<ReturnType<typeof decodeU>> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`alku2: failed to load ${url} (${res.status})`);
-  return decodeU(await res.arrayBuffer());
+  return decodeU(await res.arrayBuffer(), { glyphSheet: true });
 }
 
-/** Fetch the HOI horizon picture and decode it via the `hzpic` read path (palette@16, pixels@add*16). */
-async function fetchHoi(url: string): Promise<ReturnType<typeof decodeHoi>> {
+/** Fetch the HOI horizon picture and decode it via the engine `.U` path (palette@16, pixels@add*16). */
+async function fetchHoi(url: string): Promise<ReturnType<typeof decodeU>> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`alku2: failed to load ${url} (${res.status})`);
-  return decodeHoi(await res.arrayBuffer());
+  return decodeU(await res.arrayBuffer());
 }
 
 /**

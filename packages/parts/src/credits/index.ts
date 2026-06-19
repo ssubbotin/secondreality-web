@@ -1,5 +1,5 @@
+export { type DecodedU, decodeU } from '@sr/engine';
 export { Credits, type LookMode } from './credits.js';
-export { type DecodedU, decodeU } from './decode-u.js';
 export { type BitmapFont, buildFont, FONA_ORDER, FONAY, type Glyph, loadFona } from './font.js';
 export { centerOffset, measureLine, SCREEN_W } from './layout.js';
 export { buildCreditsPalette } from './palette.js';
