@@ -5,6 +5,8 @@ export * from './audio/stmik-module.js';
 export * from './loop.js';
 export * from './math/aspect.js';
 export * from './render/blit.js';
+export * from './render/bloom.js';
+export * from './render/bloom-math.js';
 export * from './render/renderer.js';
 export * from './render/select-backend.js';
 export * from './sync/mframe.js';
