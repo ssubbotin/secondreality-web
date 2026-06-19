@@ -10,10 +10,19 @@ import { buildFramePolys, type SceneObject } from './scene.js';
 const fixture = (name: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url))));
 
-const CAM: RMatrix = { m: [-16385, 0, 0, 0, 10, -16384, 0, -16384, -10], x: -221, y: -323, z: 7088 };
+const CAM: RMatrix = {
+  m: [-16385, 0, 0, 0, 10, -16384, 0, -16384, -10],
+  x: -221,
+  y: -323,
+  z: 7088,
+};
 
 describe('vector1 scene pipeline (VISU/C/U2A.C draw loop)', () => {
-  const models = [parseModel(fixture('U2A.001')), parseModel(fixture('U2A.002')), parseModel(fixture('U2A.003'))];
+  const models = [
+    parseModel(fixture('U2A.001')),
+    parseModel(fixture('U2A.002')),
+    parseModel(fixture('U2A.003')),
+  ];
   const mat = parseSceneMaterials(fixture('U2A.00M'));
   const { frames } = decodeAnimation(fixture('U2A.0AB'));
 

@@ -63,10 +63,24 @@ export function matMul(a: readonly number[], b: readonly number[]): number[] {
 }
 
 /** rotatesingle (ACALC.ASM): out = m . p (matrix rows dotted with the vector), each row >> 14. */
-export function rotatePoint(m: readonly number[], px: number, py: number, pz: number): [number, number, number] {
-  const x = BigInt(m[0] ?? 0) * BigInt(px) + BigInt(m[1] ?? 0) * BigInt(py) + BigInt(m[2] ?? 0) * BigInt(pz);
-  const y = BigInt(m[3] ?? 0) * BigInt(px) + BigInt(m[4] ?? 0) * BigInt(py) + BigInt(m[5] ?? 0) * BigInt(pz);
-  const z = BigInt(m[6] ?? 0) * BigInt(px) + BigInt(m[7] ?? 0) * BigInt(py) + BigInt(m[8] ?? 0) * BigInt(pz);
+export function rotatePoint(
+  m: readonly number[],
+  px: number,
+  py: number,
+  pz: number,
+): [number, number, number] {
+  const x =
+    BigInt(m[0] ?? 0) * BigInt(px) +
+    BigInt(m[1] ?? 0) * BigInt(py) +
+    BigInt(m[2] ?? 0) * BigInt(pz);
+  const y =
+    BigInt(m[3] ?? 0) * BigInt(px) +
+    BigInt(m[4] ?? 0) * BigInt(py) +
+    BigInt(m[5] ?? 0) * BigInt(pz);
+  const z =
+    BigInt(m[6] ?? 0) * BigInt(px) +
+    BigInt(m[7] ?? 0) * BigInt(py) +
+    BigInt(m[8] ?? 0) * BigInt(pz);
   return [shr14(x), shr14(y), shr14(z)];
 }
 
@@ -126,8 +140,17 @@ export function rotateVertex(
  * sort key. Matches calc_rotate's Z component exactly (matrix elements are taken as full longs here, as the
  * asm uses `mov eax,[m+24]` not movsx, but for valid rotation matrices the high words are sign extensions).
  */
-export function singleZ(m: readonly number[], pz: number, vx: number, vy: number, vz: number): number {
-  const s = BigInt(m[6] ?? 0) * BigInt(vx) + BigInt(m[7] ?? 0) * BigInt(vy) + BigInt(m[8] ?? 0) * BigInt(vz);
+export function singleZ(
+  m: readonly number[],
+  pz: number,
+  vx: number,
+  vy: number,
+  vz: number,
+): number {
+  const s =
+    BigInt(m[6] ?? 0) * BigInt(vx) +
+    BigInt(m[7] ?? 0) * BigInt(vy) +
+    BigInt(m[8] ?? 0) * BigInt(vz);
   return shr14(s) + pz;
 }
 

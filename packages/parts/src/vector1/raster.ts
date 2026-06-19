@@ -5,7 +5,7 @@
 // web port we clip in screen space, which is visually identical for these convex faces). Painter ordering
 // (objects back-to-front) is preserved by the caller, so later polys overwrite earlier ones.
 
-import { type ScreenPoly, SCREEN_H, SCREEN_W } from './scene.js';
+import { SCREEN_H, SCREEN_W, type ScreenPoly } from './scene.js';
 
 /** Build the edge list for a polygon and fill it flat into `out`. */
 function fillPoly(out: Uint8Array, pts: readonly { x: number; y: number }[], color: number): void {
@@ -61,4 +61,4 @@ export function rasterFrame(out: Uint8Array, polys: readonly ScreenPoly[], bg = 
   for (const p of polys) fillPoly(out, p.pts, p.color);
 }
 
-export { SCREEN_W, SCREEN_H };
+export { SCREEN_H, SCREEN_W };

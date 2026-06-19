@@ -8,7 +8,9 @@ function readI16(d: Uint8Array, o: number): number {
 }
 
 function readI32(d: Uint8Array, o: number): number {
-  return ((d[o] ?? 0) | ((d[o + 1] ?? 0) << 8) | ((d[o + 2] ?? 0) << 16) | ((d[o + 3] ?? 0) << 24)) | 0;
+  return (
+    (d[o] ?? 0) | ((d[o + 1] ?? 0) << 8) | ((d[o + 2] ?? 0) << 16) | ((d[o + 3] ?? 0) << 24) | 0
+  );
 }
 
 export interface SceneMaterials {

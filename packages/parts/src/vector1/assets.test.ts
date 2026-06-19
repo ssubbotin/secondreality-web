@@ -6,9 +6,9 @@ import {
   calcLight,
   effectiveFaceFlags,
   F_GOURAUD,
+  F_SHADE_MASK,
   F_SHADE16,
   F_SHADE32,
-  F_SHADE_MASK,
   normalLight,
 } from './light.js';
 

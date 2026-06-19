@@ -48,7 +48,8 @@ function readU16(d: Uint8Array, o: number): number {
 
 function readI32(d: Uint8Array, o: number): number {
   // Reconstruct a signed 32-bit value (vertex coords reach +/- a few hundred thousand).
-  const v = (d[o] ?? 0) | ((d[o + 1] ?? 0) << 8) | ((d[o + 2] ?? 0) << 16) | ((d[o + 3] ?? 0) << 24);
+  const v =
+    (d[o] ?? 0) | ((d[o + 1] ?? 0) << 8) | ((d[o + 2] ?? 0) << 16) | ((d[o + 3] ?? 0) << 24);
   return v | 0;
 }
 

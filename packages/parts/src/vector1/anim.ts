@@ -48,7 +48,7 @@ class StreamReader {
         const b1 = this.u8();
         const b2 = this.u8();
         const b3 = this.u8();
-        return (b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)) | 0;
+        return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24) | 0;
       }
     }
   }
@@ -91,7 +91,10 @@ function snapshot(slots: AnimSlot[], fov: number): AnimFrame {
 export function decodeAnimation(data: Uint8Array | ArrayBuffer): DecodeResult {
   const d = data instanceof Uint8Array ? data : new Uint8Array(data);
   const r = new StreamReader(d);
-  const slots: AnimSlot[] = Array.from({ length: SLOT_COUNT }, () => ({ r0: zeroMatrix(), on: false }));
+  const slots: AnimSlot[] = Array.from({ length: SLOT_COUNT }, () => ({
+    r0: zeroMatrix(),
+    on: false,
+  }));
   const frames: AnimFrame[] = [];
   let fov = 0;
   let resetFrame = -1;

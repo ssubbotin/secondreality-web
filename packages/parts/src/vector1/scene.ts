@@ -9,8 +9,8 @@
 import {
   applyMatrix,
   cloneMatrix,
-  projectVertex,
   PROJ_MODEX,
+  projectVertex,
   type RMatrix,
   rotateVertex,
   singleZ,
@@ -41,7 +41,12 @@ function s16(v: number): number {
 }
 
 /** calc_nrotate (ACALC.ASM) for one normal: 16-bit signed matrix * 16-bit signed normal, >>14. */
-function rotateNormal(m: readonly number[], nx: number, ny: number, nz: number): [number, number, number] {
+function rotateNormal(
+  m: readonly number[],
+  nx: number,
+  ny: number,
+  nz: number,
+): [number, number, number] {
   const m0 = s16(m[0] ?? 0);
   const m1 = s16(m[1] ?? 0);
   const m2 = s16(m[2] ?? 0);
