@@ -13,8 +13,8 @@ import { FIELD_H, FIELD_W } from './raster.js';
 /**
  * Authentic/modern surface for the voxel field: maps the FIELD_W×FIELD_H (160×200) palette-index buffer
  * through the 6-bit VGA palette (×4) into an RGBA DataTexture and blits it to the supplied target. The
- * DataTexture is tagged sRGB so the bytes land verbatim; rows are flipped on write because the index
- * buffer is top-row-first while three's uv origin is bottom-left.
+ * DataTexture is tagged sRGB so the bytes land verbatim; rows are written top-first (`dst = row*WIDTH`) to
+ * match the blit pipeline, which maps DataTexture row 0 → screen top.
  *
  * The look toggles via the upscale filter: authentic = chunky NearestFilter (the original mode-X
  * horizontal pixel-doubling + nearest upscale to the viewport), modern = smooth LinearFilter. This is

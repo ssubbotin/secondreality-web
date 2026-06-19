@@ -75,4 +75,21 @@ describe('comanche raster (THELOOP voxel walk)', () => {
     const b = runColumn(5000, 3000, -20, 40);
     expect(a).not.toEqual(b);
   });
+
+  it('shades land in the palette gradient region, not the flat-cyan plateau (THELOOP `shr dl,1`)', () => {
+    // The fidelity fix: `shr dl,1` shifts the LOW BYTE, so dl ∈ 0..127. With the byte mask applied AFTER
+    // the shift (the old bug) the shades drift into ~185..211 — the flat cyan [0,63,63] plateau (≥152),
+    // rendering the whole terrain one solid colour. Assert the drawn bytes stay below the plateau and
+    // span a real range (a depth/height gradient, not a single value).
+    const out = new Uint8Array(FIELD_W * FIELD_H);
+    const s = createFieldState();
+    for (let i = 0; i < 200; i++) stepField(s, sin1024);
+    rasterField(out, s, heightX, heightY, off);
+    const drawn = [...out].filter((v) => v > 0);
+    expect(drawn.length).toBeGreaterThan(0);
+    const lo = Math.min(...drawn);
+    const hi = Math.max(...drawn);
+    expect(hi).toBeLessThan(152); // below the [0,63,63] plateau
+    expect(hi - lo).toBeGreaterThan(16); // a genuine gradient, not flat
+  });
 });
