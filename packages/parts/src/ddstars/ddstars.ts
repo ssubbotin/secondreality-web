@@ -1,4 +1,11 @@
-import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
+import {
+  BloomComposite,
+  type DemoContext,
+  type Effect,
+  type FrameContext,
+  type LoadContext,
+  type RenderTarget,
+} from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
 import { RasterSurface } from './nodes.js';
 import { buildStarPalette } from './palette.js';
@@ -30,6 +37,13 @@ const SIM_DT = 1 / SIM_HZ;
  */
 const LIFETIME = 5200;
 
+// Modern-mode bloom tuning. The field is bright stars + the "Desert Dream" reveal over black; a low
+// threshold blooms the lit stars and text while black stays black, a moderate strength gives a soft
+// twinkle halo. Authentic mode never constructs the bloom.
+const BLOOM_THRESHOLD = 0.45;
+const BLOOM_KNEE = 0.2;
+const BLOOM_STRENGTH = 1.1;
+
 export class DDStars implements Effect {
   readonly id = 'ddstars';
 
@@ -43,6 +57,7 @@ export class DDStars implements Effect {
   private readonly raster = new StarRaster();
   private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
   private surface: RasterSurface | null = null;
+  private bloom: BloomComposite | null = null;
   private textpic: DecodedTextpic | null = null;
   private acc = 0;
 
@@ -73,6 +88,17 @@ export class DDStars implements Effect {
 
   private applyMode(): void {
     this.surface?.setFilter(this.mode === 'authentic' ? NearestFilter : LinearFilter);
+    // Bloom exists only in modern mode; authentic blits the raster straight through, unchanged.
+    if (this.mode === 'modern') {
+      if (!this.bloom) {
+        this.bloom = new BloomComposite();
+        this.bloom.setThreshold(BLOOM_THRESHOLD, BLOOM_KNEE);
+        this.bloom.setStrength(BLOOM_STRENGTH);
+      }
+    } else {
+      this.bloom?.dispose();
+      this.bloom = null;
+    }
   }
 
   /**
@@ -112,17 +138,28 @@ export class DDStars implements Effect {
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    if (!renderer || !this.surface) return;
-    this.surface.render(renderer, target.gpu);
+    const surface = this.surface;
+    if (!renderer || !surface) return;
+    if (this.bloom) {
+      // Modern: raster → scratch, then bloom (bright-pass → blur → composite) → the supplied target.
+      this.bloom.render(renderer, target.gpu, (r, scratch) => surface.render(r, scratch));
+    } else {
+      // Authentic: blit the chunky raster straight through, unchanged.
+      surface.render(renderer, target.gpu);
+    }
   }
 
-  resize(_width: number, _height: number): void {
-    // The 320×200 field is fixed; the blit upscales to whatever target it is given.
+  resize(width: number, height: number): void {
+    // The 320×200 field is fixed; the blit upscales to whatever target it is given. The bloom scratch
+    // buffers track the output resolution so the glow is sharp.
+    this.bloom?.resize(width, height);
   }
 
   dispose(): void {
     this.surface?.dispose();
     this.surface = null;
+    this.bloom?.dispose();
+    this.bloom = null;
     this.ctx = null;
   }
 }
