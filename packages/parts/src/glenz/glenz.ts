@@ -1,11 +1,4 @@
-import {
-  BloomComposite,
-  type DemoContext,
-  type Effect,
-  type FrameContext,
-  type LoadContext,
-  type RenderTarget,
-} from '@sr/engine';
+import type { DemoContext, Effect, FrameContext, LoadContext, RenderTarget } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
 import { decodeFcPicture, fcBackground, fcBackpal } from './fc-picture.js';
 import { MAIN_SOLID, SMALL_SOLID } from './geometry.js';
@@ -25,13 +18,6 @@ const SIM_HZ = 70; // original mode-X frame cadence; the sim is fps-independent 
 const SIM_DT = 1 / SIM_HZ;
 const ZPOS = 7500; // MAIN.C zpos
 const LOOP_FRAME = 2100; // self-loop point in the lab (both solids have come and the scales collapse)
-
-// Modern-mode bloom tuning. The frame is the FC backdrop with the additive glass solids ORed over it,
-// so the threshold is set higher than the pure-dot parts: it blooms the bright additive solid edges
-// (the "glass" glow) without washing out the mid-tone backdrop. Authentic mode never constructs bloom.
-const BLOOM_THRESHOLD = 0.62;
-const BLOOM_KNEE = 0.25;
-const BLOOM_STRENGTH = 0.9;
 
 /**
  * Glenz vectors (part #4, original GLENZ). Real-time 3D additive "glass" solids spun over the FC backdrop
@@ -56,7 +42,6 @@ export class Glenz implements Effect {
   private background: Uint8Array = new Uint8Array(SCREEN_W * SCREEN_H);
   private state: GlenzState = createGlenzState();
   private surface: GlenzSurface | null = null;
-  private bloom: BloomComposite | null = null;
   private acc = 0;
 
   async load(_ctx: LoadContext): Promise<void> {
@@ -86,17 +71,6 @@ export class Glenz implements Effect {
 
   private applyMode(): void {
     this.surface?.setFilter(this.mode === 'authentic' ? NearestFilter : LinearFilter);
-    // Bloom exists only in modern mode; authentic blits the raster straight through, unchanged.
-    if (this.mode === 'modern') {
-      if (!this.bloom) {
-        this.bloom = new BloomComposite();
-        this.bloom.setThreshold(BLOOM_THRESHOLD, BLOOM_KNEE);
-        this.bloom.setStrength(BLOOM_STRENGTH);
-      }
-    } else {
-      this.bloom?.dispose();
-      this.bloom = null;
-    }
   }
 
   update(frame: FrameContext): void {
@@ -143,28 +117,17 @@ export class Glenz implements Effect {
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    const surface = this.surface;
-    if (!renderer || !surface) return;
-    if (this.bloom) {
-      // Modern: raster → scratch, then bloom (bright-pass → blur → composite) → the supplied target.
-      this.bloom.render(renderer, target.gpu, (r, scratch) => surface.render(r, scratch));
-    } else {
-      // Authentic: blit the chunky raster straight through, unchanged.
-      surface.render(renderer, target.gpu);
-    }
+    if (!renderer || !this.surface) return;
+    this.surface.render(renderer, target.gpu);
   }
 
-  resize(width: number, height: number): void {
-    // The 320x200 field is fixed; the blit upscales to whatever target it is given. The bloom scratch
-    // buffers track the output resolution so the glow is sharp.
-    this.bloom?.resize(width, height);
+  resize(_width: number, _height: number): void {
+    // The 320x200 field is fixed; the blit upscales to whatever target it is given.
   }
 
   dispose(): void {
     this.surface?.dispose();
     this.surface = null;
-    this.bloom?.dispose();
-    this.bloom = null;
     this.ctx = null;
   }
 }

@@ -1,7 +1,6 @@
 // packages/parts/src/plasma/plasma.ts
 import {
   Blit,
-  BloomComposite,
   type DemoContext,
   type Effect,
   type FrameContext,
@@ -37,13 +36,6 @@ const INITK0: PhaseK = INITTABLE_K[0] ?? [3500, 2300, 3900, 3670];
 const INITL0: PhaseK = INITTABLE_L[0] ?? [1000, 2000, 3000, 4000];
 const SECTION_END = TIMETABLE[TIMETABLE.length - 1] ?? 0;
 
-// Modern-mode bloom tuning. Plasma fills the whole frame with colour, so the threshold is HIGH: only
-// the brightest plasma crests bloom into a soft glow; the mid-tone body of the field stays as-is rather
-// than washing the screen out. Authentic mode never constructs the bloom.
-const BLOOM_THRESHOLD = 0.72;
-const BLOOM_KNEE = 0.2;
-const BLOOM_STRENGTH = 0.7;
-
 export class Plasma implements Effect {
   readonly id = 'plasma';
 
@@ -53,7 +45,6 @@ export class Plasma implements Effect {
   private field: PlasmaField | null = null;
   private fieldTarget: GpuRenderTarget | null = null;
   private blit: Blit | null = null;
-  private bloom: BloomComposite | null = null;
 
   private k: PhaseK = INITK0;
   private l: PhaseK = INITL0;
@@ -95,23 +86,11 @@ export class Plasma implements Effect {
 
   private applyFilter(): void {
     const tex = this.fieldTarget?.texture;
-    if (tex) {
-      const filter = this.mode === 'authentic' ? NearestFilter : LinearFilter;
-      tex.minFilter = filter;
-      tex.magFilter = filter;
-      tex.needsUpdate = true;
-    }
-    // Bloom exists only in modern mode; authentic upscales the field straight through, unchanged.
-    if (this.mode === 'modern') {
-      if (!this.bloom) {
-        this.bloom = new BloomComposite();
-        this.bloom.setThreshold(BLOOM_THRESHOLD, BLOOM_KNEE);
-        this.bloom.setStrength(BLOOM_STRENGTH);
-      }
-    } else {
-      this.bloom?.dispose();
-      this.bloom = null;
-    }
+    if (!tex) return;
+    const filter = this.mode === 'authentic' ? NearestFilter : LinearFilter;
+    tex.minFilter = filter;
+    tex.magFilter = filter;
+    tex.needsUpdate = true;
   }
 
   update(frame: FrameContext): void {
@@ -157,30 +136,15 @@ export class Plasma implements Effect {
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    const field = this.field;
-    const fieldTarget = this.fieldTarget;
-    const blit = this.blit;
-    if (!renderer || !field || !fieldTarget || !blit) return;
-    if (this.bloom) {
-      // Modern: render the field, upscale it into the bloom scratch, then bloom → the supplied target.
-      this.bloom.render(renderer, target.gpu, (r, scratch) => {
-        field.render(r, fieldTarget); // plasma → 320×280 field
-        r.setRenderTarget(scratch); // upscale field → bloom scratch
-        blit.render(r);
-        r.setRenderTarget(null);
-      });
-    } else {
-      field.render(renderer, fieldTarget); // plasma → 320×280 field
-      renderer.setRenderTarget(target.gpu); // upscale field → the supplied output target
-      blit.render(renderer);
-      renderer.setRenderTarget(null);
-    }
+    if (!renderer || !this.field || !this.fieldTarget || !this.blit) return;
+    this.field.render(renderer, this.fieldTarget); // plasma → 320×280 field
+    renderer.setRenderTarget(target.gpu); // upscale field → the supplied output target
+    this.blit.render(renderer);
+    renderer.setRenderTarget(null);
   }
 
-  resize(width: number, height: number): void {
-    // The field is a fixed logical size; the blit upscales to whatever target it is given. The bloom
-    // scratch buffers track the output resolution so the glow is sharp.
-    this.bloom?.resize(width, height);
+  resize(_width: number, _height: number): void {
+    // The field is a fixed logical size; the blit upscales to whatever target it is given.
   }
 
   dispose(): void {
@@ -190,8 +154,6 @@ export class Plasma implements Effect {
     this.fieldTarget = null;
     this.blit?.dispose();
     this.blit = null;
-    this.bloom?.dispose();
-    this.bloom = null;
     this.ctx = null;
   }
 }
