@@ -4,7 +4,7 @@ import { type AnimFrame, decodeAnimation } from './anim.js';
 import { parseSceneMaterials, type SceneMaterials } from './assets.js';
 import type { RMatrix } from './fixed.js';
 import { type Model, parseModel } from './model.js';
-import { type ModernObject, RasterSurface, VectorScene } from './nodes.js';
+import { RasterSurface } from './nodes.js';
 import { rasterFrame } from './raster.js';
 import { buildFramePolys, SCREEN_H, SCREEN_W, type SceneObject } from './scene.js';
 
@@ -27,8 +27,10 @@ async function fetchBytes(url: string): Promise<Uint8Array> {
  * Vector Part I — "Space battle" (part #8, original VISU/U2A). The Pixel ships sweep past a static observer
  * driven by the baked U2A.0AB animation track. load() fetches the compiled engine objects + palette +
  * stream; update() advances the 70 Hz track on an accumulator and decodes the current frame's object poses;
- * render() draws via the CPU flat-poly raster (authentic, chunky mode-X) or real three.js flat-shaded
- * meshes (modern, default), into the supplied RenderTarget. The track loops at frame 521 (resetscene).
+ * render() draws via the CPU flat-poly raster into the supplied RenderTarget. Both modes share the proven
+ * rasteriser (the original VISU/ADRAW.ASM scanline fill, shaded through the VGA palette); the authentic↔modern
+ * toggle is purely the upscale filter — chunky NearestFilter (mode-X) vs smooth LinearFilter. The track loops
+ * at frame 521 (resetscene).
  *
  * The U2A background picture + copper palette animation are deferred (the picture pipeline) — the field is
  * a flat dark clear. See the STATUS doc.
@@ -45,7 +47,6 @@ export class Vector1 implements Effect {
   private cam: RMatrix = { m: [16384, 0, 0, 0, 16384, 0, 0, 0, 16384], x: 0, y: 0, z: 0 };
 
   private surface: RasterSurface | null = null;
-  private vectorScene: VectorScene | null = null;
   private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
 
   private acc = 0;
@@ -71,8 +72,6 @@ export class Vector1 implements Effect {
     this.ctx = ctx;
     const pal = this.materials?.palette ?? new Uint8Array(768);
     this.surface = new RasterSurface(pal);
-    this.vectorScene = new VectorScene(this.models, pal, this.cam);
-    this.vectorScene.setSize(ctx.viewport.width, ctx.viewport.height);
     this.acc = 0;
     this.frameIdx = 0;
     this.applyMode();
@@ -90,11 +89,10 @@ export class Vector1 implements Effect {
   }
 
   /** Map the active frame's slots onto the scene-object instances (slot -> mesh via the object index). */
-  private objectsForFrame(frame: AnimFrame): { cpu: SceneObject[]; gpu: ModernObject[] } {
+  private objectsForFrame(frame: AnimFrame): SceneObject[] {
     const cpu: SceneObject[] = [];
-    const gpu: ModernObject[] = [];
     const mat = this.materials;
-    if (!mat) return { cpu, gpu };
+    if (!mat) return cpu;
     for (let slot = 1; slot < mat.conum; slot++) {
       const objIdx = mat.objectIndex[slot - 1] ?? 1;
       const model = this.models[objIdx - 1];
@@ -102,9 +100,8 @@ export class Vector1 implements Effect {
       if (!model || !s) continue;
       const r0: RMatrix = { m: [...s.m], x: s.x, y: s.y, z: s.z };
       cpu.push({ model, r0, on: s.on });
-      gpu.push({ model, r0, on: s.on });
     }
-    return { cpu, gpu };
+    return cpu;
   }
 
   update(frame: FrameContext): void {
@@ -117,33 +114,29 @@ export class Vector1 implements Effect {
     }
     const active = this.frames[this.frameIdx];
     if (!active) return;
-    const { cpu, gpu } = this.objectsForFrame(active);
-
-    if (this.mode === 'modern') {
-      this.vectorScene?.update(gpu);
-    } else {
-      const polys = buildFramePolys(cpu, this.cam);
-      rasterFrame(this.index, polys, 0);
-      this.surface?.update(this.index);
-    }
+    // Both modes render the proven CPU rasteriser (the original ADRAW.ASM scanline fill, shaded through the
+    // VGA palette); the look toggles via the upscale filter (authentic = chunky NearestFilter, modern =
+    // smooth LinearFilter). A GPU flat-shaded mesh path was tried but rendered the dark palette-base colour
+    // unlit (near-black) with winding/sliver artefacts, so the cross-backend raster path ships for both.
+    const cpu = this.objectsForFrame(active);
+    const polys = buildFramePolys(cpu, this.cam);
+    rasterFrame(this.index, polys, 0);
+    this.surface?.update(this.index);
   }
 
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
-    if (!renderer) return;
-    if (this.mode === 'modern') this.vectorScene?.render(renderer, target.gpu);
-    else this.surface?.render(renderer, target.gpu);
+    if (!renderer || !this.surface) return;
+    this.surface.render(renderer, target.gpu);
   }
 
-  resize(width: number, height: number): void {
-    this.vectorScene?.setSize(width, height);
+  resize(_width: number, _height: number): void {
+    // The raster is a fixed 320x200 surface upscaled by the host blit; nothing resolution-dependent here.
   }
 
   dispose(): void {
     this.surface?.dispose();
     this.surface = null;
-    this.vectorScene?.dispose();
-    this.vectorScene = null;
     this.ctx = null;
   }
 }
