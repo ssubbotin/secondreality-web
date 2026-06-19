@@ -14,9 +14,9 @@ import { SCREEN_H, SCREEN_W } from './pos.js';
  * FOREST raster surface: maps the composited 320×200 8-bit index buffer through the picture's 6-bit VGA
  * palette (×4) into an RGBA `DataTexture` and blits it to the supplied target — the proven
  * `PictureSurface` / dot-tunnel `RasterSurface` pattern. The texture is tagged sRGB so the DAC bytes land
- * verbatim; rows are flipped on write because the index buffer is top-row-first while three's uv origin is
- * bottom-left. `setFilter` toggles the authentic (chunky `NearestFilter`) vs modern (smooth
- * `LinearFilter`) upscale.
+ * verbatim; rows are written top-first (`dst = row * WIDTH`) so DataTexture row 0 maps to the screen top,
+ * matching the blit pipeline (no vertical flip). `setFilter` toggles the authentic (chunky `NearestFilter`)
+ * vs modern (smooth `LinearFilter`) upscale.
  */
 export class ForestSurface {
   private readonly palette6 = new Uint8Array(256 * 3);

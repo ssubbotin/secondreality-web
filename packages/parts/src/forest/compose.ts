@@ -6,9 +6,12 @@
  *   2. for the active warp phase, walk all 7347 font pixels in lockstep with the font index, and for each
  *      listed destination screen offset, add the font pixel value to the background pixel there.
  *
- * The original does an 8-bit `add al, font[bx]` that wraps mod 256. On the real FOREST data the background
- * is dark (low indices) and lit text is biased into 128.., so the sum never overflows; we **clamp to 255**
- * defensively (a deliberate, invisible-on-real-data departure from mod-256 wrap — see the design doc).
+ * `ROUTINES.ASM Putrouts` does a plain 8-bit `add al, byte ptr fs:[bx]` and stores the result with no
+ * saturation, so the sum wraps mod 256. We reproduce that wrap verbatim: where the lit reflection (font
+ * biased into 128..) lands on an already-bright background highlight (lake-edge indices ~120..127) the sum
+ * exceeds 255 and wraps down into the dark band, which is exactly the speckled shimmer the original shows
+ * on the rippling water. (A previous port clamped to 255 here; on the real FOREST data ~2.5% of stamps
+ * overflow, so clamping was *not* invisible — the faithful behaviour is the mod-256 wrap.)
  */
 
 import type { PosTable } from './pos.js';
@@ -21,9 +24,9 @@ export function blitBackground(screen: Uint8Array, background: Uint8Array): void
 
 /**
  * Stamp one warp phase of the font window onto `screen` (which must already hold the background). For each
- * font pixel `i` with a non-zero value, add it (clamped to 255) to every destination the phase lists.
- * Font value 0 contributes nothing, matching the original (adding 0 is a no-op) and skipping the inner
- * loop entirely when the pixel is dark.
+ * font pixel `i` with a non-zero value, add it to every destination the phase lists, wrapping mod 256 like
+ * the original `add al, byte ptr fs:[bx]` / `mov byte ptr es:[di], al`. Font value 0 contributes nothing,
+ * matching the original (adding 0 is a no-op) and skipping the inner loop entirely when the pixel is dark.
  */
 export function stampPhase(screen: Uint8Array, font: Uint8Array, pos: PosTable): void {
   const { count, start, dests } = pos;
@@ -35,8 +38,8 @@ export function stampPhase(screen: Uint8Array, font: Uint8Array, pos: PosTable):
     const s = start[i] ?? 0;
     for (let j = 0; j < c; j++) {
       const off = dests[s + j] ?? 0;
-      const sum = (screen[off] ?? 0) + value;
-      screen[off] = sum > 255 ? 255 : sum;
+      // 8-bit add with wraparound (ROUTINES.ASM stores the byte result unsaturated).
+      screen[off] = ((screen[off] ?? 0) + value) & 0xff;
     }
   }
 }
