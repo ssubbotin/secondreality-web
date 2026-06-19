@@ -5,21 +5,27 @@
 // plots row y at u1 (descending from the top) and row (lenshig-1-y) at u2 (ascending from the bottom),
 // advancing u1 by +320 and u2 by -320. Each plotted row replays its precomputed plot-ops.
 
+import { decodeRawPicture } from '@sr/engine';
 import { LENS_HIG, LENS_XS, LENS_YS, type LensPlan, SCREEN_W } from './displacement.js';
 
 export const SCREEN_H = 200;
 export const SCREEN_PIXELS = SCREEN_W * SCREEN_H; // 64000
 
+/** The bottom-edge overflow guard MAIN.C:302 appends so magnified reads never run past the page. */
+const GUARD_BYTES = 1536;
+
 /**
- * Build the source ("back") buffer: the raw 320×200 index image plus the 1536-byte overflow guard
- * MAIN.C:302 appends (`memcpy(back+64000, back+64000-1536, 1536)`) so the magnified reads near the bottom
- * edge never run past the array. Source offsets are masked to 16 bits (mode-X segment addressing) before
- * the read, exactly as the original far pointers wrapped.
+ * Build the source ("back") buffer: the raw 320×200 index image (the engine un-headered raw-picture
+ * format — `LENS.U` is a flat 64000-byte page, decoded by `decodeRawPicture`) plus the 1536-byte overflow
+ * guard MAIN.C:302 appends (`memcpy(back+64000, back+64000-1536, 1536)`) so the magnified reads near the
+ * bottom edge never run past the array. Source offsets are masked to 16 bits (mode-X segment addressing)
+ * before the read, exactly as the original far pointers wrapped.
  */
 export function makeBackBuffer(raw: Uint8Array): Uint8Array {
-  const back = new Uint8Array(SCREEN_PIXELS + 1536);
-  back.set(raw.subarray(0, SCREEN_PIXELS));
-  back.set(raw.subarray(SCREEN_PIXELS - 1536, SCREEN_PIXELS), SCREEN_PIXELS);
+  const page = decodeRawPicture(raw, SCREEN_PIXELS);
+  const back = new Uint8Array(SCREEN_PIXELS + GUARD_BYTES);
+  back.set(page);
+  back.set(page.subarray(SCREEN_PIXELS - GUARD_BYTES, SCREEN_PIXELS), SCREEN_PIXELS);
   return back;
 }
 

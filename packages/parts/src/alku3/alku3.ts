@@ -9,7 +9,6 @@ import type {
 import { decodeU } from '@sr/engine';
 import { LinearFilter, NearestFilter } from 'three';
 import { SCREEN_H, SCREEN_W } from './backdrop.js';
-import { decodeHoi } from './hoi.js';
 import { buildAlkuPalette, lerpPalette } from './palette.js';
 import { revealAt } from './reveal.js';
 import { RasterSurface } from './surface.js';
@@ -123,16 +122,16 @@ export class Alku3 implements Effect {
   }
 }
 
-/** Fetch a `.U`/`.UH` asset and decode it through the engine glyph-sheet decoder. */
+/** Fetch the FONA glyph sheet and decode it through the engine glyph-sheet path (`add*16 - 1`). */
 async function fetchU(url: string): Promise<ReturnType<typeof decodeU>> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`alku3: failed to load ${url} (${res.status})`);
-  return decodeU(await res.arrayBuffer());
+  return decodeU(await res.arrayBuffer(), { glyphSheet: true });
 }
 
-/** Fetch the HOI horizon picture and decode it via the `hzpic` read path (palette@16, pixels@add*16). */
-async function fetchHoi(url: string): Promise<ReturnType<typeof decodeHoi>> {
+/** Fetch the HOI horizon picture and decode it via the engine `.U` path (palette@16, pixels@add*16). */
+async function fetchHoi(url: string): Promise<ReturnType<typeof decodeU>> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`alku3: failed to load ${url} (${res.status})`);
-  return decodeHoi(await res.arrayBuffer());
+  return decodeU(await res.arrayBuffer());
 }

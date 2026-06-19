@@ -1,4 +1,4 @@
-import type { BitmapFont } from './font.js';
+import type { BitmapFont } from '@sr/engine';
 
 /**
  * The chunky text scroll buffer, ported from ALKU `MAIN.C`. The original declares `char tbuf[186][352]`

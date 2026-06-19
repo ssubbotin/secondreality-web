@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { decodeU } from './decode-u.js';
+import { decodeU } from '../assets/decode-u.js';
 import { buildFont, FONA_ORDER, loadFona } from './font.js';
 
 const fixture = (name: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url))));
 
-const fona = (): ReturnType<typeof loadFona> => loadFona(decodeU(fixture('FONA.UH')));
+// The FONA glyph sheet decodes with `glyphSheet: true` (the raw `FONA.INC` font body at `add*16 - 1`).
+const fona = (): ReturnType<typeof loadFona> =>
+  loadFona(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
 
 describe('buildFont (FONA glyph segmentation)', () => {
   it('segments exactly one glyph per character in FONA_ORDER plus a forced space', () => {

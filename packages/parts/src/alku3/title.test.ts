@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { decodeU } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
 import { SCREEN_H, SCREEN_W } from './backdrop.js';
-import { decodeHoi } from './hoi.js';
 import {
   composeTitle,
   FONA_ORDER_TITLE,
@@ -17,8 +16,8 @@ import {
 const fixture = (name: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url))));
 
-const font = loadTitleFont(decodeU(fixture('FONA.UH')));
-const hoi = decodeHoi(fixture('HOI.U')).indices;
+const font = loadTitleFont(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
+const hoi = decodeU(fixture('HOI.U')).indices;
 
 describe('loadTitleFont (title-aware FONA segmentation)', () => {
   it('exposes a 76-character order with the two title glyphs last', () => {

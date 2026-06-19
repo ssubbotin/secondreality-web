@@ -1,20 +1,24 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { type BitmapFont, decodeU, loadFona } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
 import { buildCardBuffers } from './alku2.js';
 import { composeFrame } from './compose.js';
 import { SCREEN_H, SCREEN_W } from './copper.js';
-import { decodeU, loadFona } from './font.js';
-import { decodeHoi } from './hoi.js';
 import { buildAlku2Palette } from './palette.js';
 import { CREDIT_CARDS } from './scroll.js';
 
 const fixture = (name: string): Uint8Array =>
   new Uint8Array(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url))));
 
+/** Decode the FONA glyph sheet (engine glyph-sheet path) and segment it, as alku2.load() does. */
+const loadFont = (): BitmapFont => loadFona(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
+/** Decode the HOI horizon picture via the engine `.U` path. */
+const decodeHoi = (buf: Uint8Array): ReturnType<typeof decodeU> => decodeU(buf);
+
 describe('buildCardBuffers', () => {
   it('stamps one non-empty buffer per credit card', () => {
-    const font = loadFona(decodeU(fixture('FONA.UH')));
+    const font = loadFont();
     const bufs = buildCardBuffers(font);
     expect(bufs.length).toBe(CREDIT_CARDS.length);
     for (const buf of bufs) {
@@ -25,7 +29,7 @@ describe('buildCardBuffers', () => {
   });
 
   it('stamps only plane bytes (0x40/0x80/0xC0) into the buffers', () => {
-    const font = loadFona(decodeU(fixture('FONA.UH')));
+    const font = loadFont();
     for (const buf of buildCardBuffers(font)) {
       for (const v of buf) {
         if (v !== 0) expect([0x40, 0x80, 0xc0]).toContain(v);
@@ -36,7 +40,7 @@ describe('buildCardBuffers', () => {
 
 describe('frame composition (integration)', () => {
   it('produces lit text indices over the HOI backdrop when a card is on-screen', () => {
-    const font = loadFona(decodeU(fixture('FONA.UH')));
+    const font = loadFont();
     const hoiDecoded = decodeHoi(fixture('HOI.U'));
     const palette = buildAlku2Palette(hoiDecoded.palette);
     const bufs = buildCardBuffers(font);
@@ -60,7 +64,7 @@ describe('frame composition (integration)', () => {
   });
 
   it('is deterministic: the same frame composes identically', () => {
-    const font = loadFona(decodeU(fixture('FONA.UH')));
+    const font = loadFont();
     const hoi = decodeHoi(fixture('HOI.U')).indices;
     const buf = buildCardBuffers(font)[1];
     expect(buf).toBeDefined();
@@ -76,7 +80,7 @@ describe('frame composition (integration)', () => {
     // The buffer is stamped centred on CENTER_X=160 within the 352-wide tbuf. With textScroll = SCREEN_W
     // (the effect's mapping at the window midpoint), textOriginX = 0, so tbuf column 160 lands at screen
     // x≈160 — the card reads centred. Assert the lit span straddles the screen centre.
-    const font = loadFona(decodeU(fixture('FONA.UH')));
+    const font = loadFont();
     const hoi = decodeHoi(fixture('HOI.U')).indices;
     const buf = buildCardBuffers(font)[0];
     expect(buf).toBeDefined();

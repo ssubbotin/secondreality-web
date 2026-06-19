@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { decodeU } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
-import { decodeU } from './font.js';
 import { buildAlku2Palette } from './palette.js';
 
 const fixture = (name: string): Uint8Array =>

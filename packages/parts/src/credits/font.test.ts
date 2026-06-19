@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { decodeU } from '@sr/engine';
 import { describe, expect, it } from 'vitest';
-import { decodeU } from './decode-u.js';
 import { FONA_ORDER, FONAY, loadFona } from './font.js';
 
 const fixture = (name: string): Buffer =>
   readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)));
 
-const font = loadFona(decodeU(fixture('FONA.UH')));
+const font = loadFona(decodeU(fixture('FONA.UH'), { glyphSheet: true }));
 
 describe('loadFona (ENDSCRL glyph segmentation)', () => {
   it('segments one glyph per order character (73 cells) plus the forced space', () => {
