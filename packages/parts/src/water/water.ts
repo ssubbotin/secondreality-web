@@ -57,9 +57,14 @@ export class Water implements Effect {
     ]);
     const bgPic = decodeRix(bgRaw);
     this.bg = bgPic.pixels;
-    this.palette = bgPic.palette; // 6-bit VGA; the demo palette (== _miekka's), used for everything
     const fontPic = decodeRix(fontRaw);
     this.font = fontPic.pixels; // 400×34 strip, row-major
+    // DEMO.PAS loads the active VGA palette from `_miekka+10` (the FONT.CLX header), NOT from BKG.CLX:
+    //   move(mem[seg(_miekka):ofs(_miekka)+10], pal, 768);
+    // The two palettes share indices 0..191 (the mirror-ball backdrop) but differ for 192..255 — exactly
+    // the colours the scroll glyphs use. Using BKG.CLX's palette mis-maps the scroller; the `_miekka`
+    // palette (carried verbatim in FONT.CLX) is the truth for the whole scene.
+    this.palette = fontPic.palette; // 6-bit VGA `_miekka` palette; used for background + scroller alike
     this.frames = watRaw.map((b) => parseWatFrame(b));
     this.loaded = true;
   }
