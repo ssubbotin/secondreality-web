@@ -9,9 +9,10 @@ import {
   rotateProject,
   sortFaces,
 } from './cube.js';
-import { CubeMesh, RasterSurface } from './nodes.js';
+import { CubeBackground, CubeMesh, RasterSurface } from './nodes.js';
 import { buildCubePalette, shadeBand } from './palette.js';
-import { rasterCube, SCREEN_H, SCREEN_W } from './raster.js';
+import { PlasmaBackground } from './plasma-bg.js';
+import { rasterCubeBuffer, SCREEN_H, SCREEN_W } from './raster.js';
 import { getspl } from './spline.js';
 import {
   buildKosinit,
@@ -46,10 +47,15 @@ export class Plasmacube implements Effect {
   private readonly dist = buildDist(this.sini);
   private readonly basePalette = buildCubePalette();
   private readonly framePalette = new Uint8Array(256 * 3);
-  private readonly index = new Uint8Array(SCREEN_W * SCREEN_H);
+  // Authentic composite buffers: the plasma background and the cube layer (CUBE_TRANSPARENT where the
+  // cube did not draw), composited in colour space by the surface (MAIN.C plz() then vect()).
+  private readonly cubeIndex = new Uint8Array(SCREEN_W * SCREEN_H);
+  private readonly plasmaIndex = new Uint8Array(SCREEN_W * SCREEN_H);
+  private readonly plasmaBg = new PlasmaBackground();
 
   private surface: RasterSurface | null = null;
   private cube: CubeMesh | null = null;
+  private background: CubeBackground | null = null;
   private frames = 0;
   private acc = 0;
 
@@ -61,6 +67,9 @@ export class Plasmacube implements Effect {
     this.ctx = ctx;
     this.surface = new RasterSurface();
     this.cube = new CubeMesh();
+    this.background = new CubeBackground();
+    this.background.setPalette(this.plasmaBg.palette());
+    this.plasmaBg.reset();
     this.frames = 0;
     this.acc = 0;
     this.applyMode();
@@ -83,7 +92,12 @@ export class Plasmacube implements Effect {
     while (this.acc >= SIM_DT) {
       this.acc -= SIM_DT;
       this.frames++;
-      if (this.frames >= SPLINE_FRAMES) this.frames = 0; // loop the fly-in/spin in the standalone lab
+      // Advance the plasma copper background one VGA frame (COPPER.ASM moveplz, called per frame).
+      this.plasmaBg.step();
+      if (this.frames >= SPLINE_FRAMES) {
+        this.frames = 0; // loop the fly-in/spin in the standalone lab
+        this.plasmaBg.reset();
+      }
     }
 
     const s = getspl(4 * 256 + this.frames * 4, this.coef, this.rata);
@@ -105,9 +119,18 @@ export class Plasmacube implements Effect {
     }
 
     if (this.mode === 'authentic') {
-      rasterCube(this.index, pts, visible, this.tiles, this.dist, this.frames & 63);
-      this.surface?.update(this.index, this.framePalette);
+      // Plasma background first, then the cube on top (CUBE_TRANSPARENT marks where the plasma shows
+      // through); the surface composites them in colour space (MAIN.C plz() then vect()).
+      this.plasmaBg.paint(this.plasmaIndex);
+      rasterCubeBuffer(this.cubeIndex, pts, visible, this.tiles, this.dist, this.frames & 63);
+      this.surface?.composite(
+        this.plasmaIndex,
+        this.plasmaBg.palette(),
+        this.cubeIndex,
+        this.framePalette,
+      );
     } else {
+      this.background?.setPhase(this.plasmaBg.phaseK(), this.plasmaBg.phaseL());
       this.cube?.setTiles(this.tiles, this.framePalette);
       this.cube?.setOrientation(this.orientationMatrix(kx, ky, kz));
     }
@@ -129,8 +152,13 @@ export class Plasmacube implements Effect {
   render(_frame: FrameContext, target: RenderTarget): void {
     const renderer = this.ctx?.renderer;
     if (!renderer) return;
-    if (this.mode === 'authentic') this.surface?.render(renderer, target.gpu);
-    else this.cube?.render(renderer, target.gpu);
+    if (this.mode === 'authentic') {
+      this.surface?.render(renderer, target.gpu);
+    } else {
+      // Plasma background fullscreen, then the cube composited on top (MAIN.C plz() then vect()).
+      this.background?.render(renderer, target.gpu);
+      this.cube?.render(renderer, target.gpu, true);
+    }
   }
 
   resize(_width: number, _height: number): void {
@@ -142,6 +170,8 @@ export class Plasmacube implements Effect {
     this.surface = null;
     this.cube?.dispose();
     this.cube = null;
+    this.background?.dispose();
+    this.background = null;
     this.ctx = null;
   }
 }
